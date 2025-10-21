@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Glasses Detection</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f4; color: #333; }
+        h1 { color: #0056b3; }
+        form { margin-top: 30px; background: white; padding: 20px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        input[type=file] { border: 1px solid #ccc; display: inline-block; padding: 6px 12px; cursor: pointer; }
+        input[type=submit] { background-color: #0056b3; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        input[type=submit]:hover { background-color: #004494; }
+    </style>
+</head>
+<body>
+    <h1>Upload an Image to Detect Glasses</h1>
+    <p>The system will find a face and classify if it's wearing glasses.</p>
+    <form method=post enctype=multipart/form-data action="/upload">
+      <input type=file name=file accept="image/png, image/jpeg">
+      <br><br>
+      <input type=submit value="Analyze Image">
+    </form>
+</body>
+</html>

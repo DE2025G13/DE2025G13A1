@@ -1,0 +1,19 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'us-central1-docker.pkg.dev/data-engineering-vm/ml-services/auto-labeler:latest', '.']
+  dir: 'components/auto-labeler'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'us-central1-docker.pkg.dev/data-engineering-vm/ml-services/dataset-splitter:latest', '.']
+  dir: 'components/dataset-splitter'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'us-central1-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:latest', '.']
+  dir: 'components/yolo-trainer'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'us-central1-docker.pkg.dev/data-engineering-vm/ml-services/model-evaluator:latest', '.']
+  dir: 'components/model-evaluator'
+
+images:
+- 'us-central1-docker.pkg.dev/data-engineering-vm/ml-services/auto-labeler:latest'
+- 'us-central1-docker.pkg.dev/data-engineering-vm/ml-services/dataset-splitter:latest'
+- 'us-central1-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:latest'
+- 'us-central1-docker.pkg.dev/data-engineering-vm/ml-services/model-evaluator:latest'
