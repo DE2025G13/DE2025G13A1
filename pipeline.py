@@ -10,7 +10,7 @@ def auto_labeler(
     labeled_dataset: Output[Artifact]
 ):
     return dsl.ContainerSpec(
-        image='us-central1-docker.pkg.dev/data-engineering-vm/ml-services/auto-labeler:latest',
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/auto-labeler:latest',
         command=[ "python3", "component.py", "--raw-bucket-name", raw_bucket_name, "--processed-bucket-name", processed_bucket_name, "--processed-prefix", processed_prefix, ]
     )
 
@@ -21,7 +21,7 @@ def dataset_splitter(
     data_yaml_artifact: Output[Artifact]
 ):
     return dsl.ContainerSpec(
-        image='us-central1-docker.pkg.dev/data-engineering-vm/ml-services/dataset-splitter:latest',
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/dataset-splitter:latest',
         command=[ "python3", "component.py", "--bucket-name", bucket_name, "--prefix", prefix, ]
     )
 
@@ -33,7 +33,7 @@ def yolo_trainer(
     model_artifact: Output[Artifact]
 ):
     return dsl.ContainerSpec(
-        image='us-central1-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:latest',
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:latest',
         command=[ "python", "component.py", "--data-yaml-uri", data_yaml_uri, "--output-bucket-name", output_bucket_name, "--output-blob-name", output_blob_name ]
     ).set_gpu_limit(1).set_accelerator_type('NVIDIA_TESLA_T4')
 
@@ -44,7 +44,7 @@ def model_evaluator(
     prod_model_uri: str
 ) -> str:
     return dsl.ContainerSpec(
-        image='us-central1-docker.pkg.dev/data-engineering-vm/ml-services/model-evaluator:latest',
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/model-evaluator:latest',
         command=[ "python", "component.py", "--data-yaml-uri", data_yaml_uri, "--new-model-uri", new_model_uri, "--prod-model-uri", prod_model_uri ]
     ).set_gpu_limit(1).set_accelerator_type('NVIDIA_TESLA_T4')
 
