@@ -1,8 +1,19 @@
-FROM europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/ultralytics:latest
+FROM google/cloud-sdk:latest
 
-RUN pip install google-cloud-storage
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY component.py .
 
-ENTRYPOINT ["python", "component.py"]
+COPY requirements.txt .
+RUN pip install --no-cache-dir --break-system-packages \
+    --extra-index-url https://download.pytorch.org/whl/cu118 \
+    -r requirements.txt
+
+COPY component.py .
+COPY entrypoint.sh .
+
+RUN chmod +x entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]
