@@ -1,3 +1,13 @@
+# PIPELINE DEFINITION
+# Name: yolo-glasses-detection-pipeline
+# Description: End-to-end pipeline for training and deploying glasses detection model
+# Inputs:
+#    cd_trigger_id: str [Default: 'deploy-glasses-app']
+#    model_bucket: str [Default: 'glasses-model_daan']
+#    pipeline_root: str [Default: 'gs://glasses-temp_daan/pipeline-root']
+#    processed_bucket: str [Default: 'glasses-data_daan']
+#    project_id: str [Default: 'braided-voyage-472209-n6']
+#    raw_bucket: str [Default: 'glasses-data_daan']
 components:
   comp-auto-labeler:
     executorLabel: exec-auto-labeler
@@ -30,17 +40,21 @@ components:
                   constant: gs://{{$.inputs.parameters['pipelinechannel--model_bucket']}}/candidate_models/{{$.pipeline_job_name}}/best.pt
               pipelinechannel--model_bucket:
                 componentInputParameter: pipelinechannel--model_bucket
-              webhook_url:
-                componentInputParameter: pipelinechannel--cd_webhook_url
+              project_id:
+                componentInputParameter: pipelinechannel--project_id
+              trigger_id:
+                componentInputParameter: pipelinechannel--cd_trigger_id
           taskInfo:
             name: trigger-cd-pipeline
     inputDefinitions:
       parameters:
-        pipelinechannel--cd_webhook_url:
+        pipelinechannel--cd_trigger_id:
           parameterType: STRING
         pipelinechannel--model-evaluator-decision:
           parameterType: STRING
         pipelinechannel--model_bucket:
+          parameterType: STRING
+        pipelinechannel--project_id:
           parameterType: STRING
   comp-dataset-splitter:
     executorLabel: exec-dataset-splitter
@@ -76,7 +90,9 @@ components:
       parameters:
         new_model_uri:
           parameterType: STRING
-        webhook_url:
+        project_id:
+          parameterType: STRING
+        trigger_id:
           parameterType: STRING
   comp-yolo-trainer:
     executorLabel: exec-yolo-trainer
@@ -107,7 +123,7 @@ deploymentSpec:
         - '{{$.inputs.parameters[''processed_bucket_name'']}}'
         - --processed-prefix
         - '{{$.inputs.parameters[''processed_prefix'']}}'
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/auto-labeler:latest
+        image: europe-west4-docker.pkg.dev/braided-voyage-472209-n6/ml-services/auto-labeler:latest
     exec-dataset-splitter:
       container:
         command:
@@ -117,7 +133,7 @@ deploymentSpec:
         - '{{$.inputs.parameters[''bucket_name'']}}'
         - --prefix
         - '{{$.inputs.parameters[''prefix'']}}'
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/dataset-splitter:latest
+        image: europe-west4-docker.pkg.dev/braided-voyage-472209-n6/ml-services/dataset-splitter:latest
     exec-model-evaluator:
       container:
         command:
@@ -126,7 +142,7 @@ deploymentSpec:
         - python component.py --data-yaml-uri {{$.inputs.parameters['data_yaml_uri']}}
           --new-model-uri {{$.inputs.parameters['new_model_uri']}} --prod-model-uri
           {{$.inputs.parameters['prod_model_uri']}} > {{$.outputs.parameters['decision'].output_file}}
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/model-evaluator:latest
+        image: europe-west4-docker.pkg.dev/braided-voyage-472209-n6/ml-services/model-evaluator:latest
         resources:
           accelerator:
             count: '1'
@@ -138,8 +154,12 @@ deploymentSpec:
         command:
         - bash
         - -c
-        - 'curl -X POST -H "Content-Type: application/json" -d ''{"substitutions":{"_NEW_MODEL_URI":"{{$.inputs.parameters[''new_model_uri'']}}"}}''
-          "{{$.inputs.parameters[''webhook_url'']}}"'
+        - "\n            set -e\n            ACCESS_TOKEN=$(gcloud auth print-access-token)\n\
+          \            curl -X POST -H \"Authorization: Bearer $ACCESS_TOKEN\"   \
+          \               -H \"Content-Type: application/json\"                  \"\
+          https://cloudbuild.googleapis.com/v1/projects/{{$.inputs.parameters['project_id']}}/triggers/{{$.inputs.parameters['trigger_id']}}:run\"\
+          \                  -d '{\"substitutions\":{\"_NEW_MODEL_URI\":\"{{$.inputs.parameters['new_model_uri']}}\"\
+          }}'\n            "
         image: google/cloud-sdk:slim
     exec-yolo-trainer:
       container:
@@ -152,7 +172,7 @@ deploymentSpec:
         - '{{$.inputs.parameters[''output_bucket_name'']}}'
         - --output-blob-name
         - '{{$.inputs.parameters[''output_blob_name'']}}'
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:latest
+        image: europe-west4-docker.pkg.dev/braided-voyage-472209-n6/ml-services/yolo-trainer:latest
         resources:
           accelerator:
             count: '1'
@@ -188,14 +208,16 @@ root:
         - model-evaluator
         inputs:
           parameters:
-            pipelinechannel--cd_webhook_url:
-              componentInputParameter: cd_webhook_url
+            pipelinechannel--cd_trigger_id:
+              componentInputParameter: cd_trigger_id
             pipelinechannel--model-evaluator-decision:
               taskOutputParameter:
                 outputParameterKey: decision
                 producerTask: model-evaluator
             pipelinechannel--model_bucket:
               componentInputParameter: model_bucket
+            pipelinechannel--project_id:
+              componentInputParameter: project_id
         taskInfo:
           name: deploy-new-model
         triggerPolicy:
@@ -269,23 +291,23 @@ root:
         isOptional: true
         parameterType: STRING
       model_bucket:
-        defaultValue: glasses-model
+        defaultValue: glasses-model_daan
         isOptional: true
         parameterType: STRING
       pipeline_root:
-        defaultValue: gs://glasses-temp/pipeline-root
+        defaultValue: gs://glasses-temp_daan/pipeline-root
         isOptional: true
         parameterType: STRING
       processed_bucket:
-        defaultValue: glasses-data
+        defaultValue: glasses-data_daan
         isOptional: true
         parameterType: STRING
       project_id:
-        defaultValue: data-engineering-vm
+        defaultValue: braided-voyage-472209-n6
         isOptional: true
         parameterType: STRING
       raw_bucket:
-        defaultValue: glasses-data
+        defaultValue: glasses-data_daan
         isOptional: true
         parameterType: STRING
 schemaVersion: 2.1.0

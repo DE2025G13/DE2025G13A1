@@ -10,7 +10,7 @@ def auto_labeler(
     labeled_dataset: Output[Artifact]
 ):
     return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/auto-labeler:latest',
+        image='europe-west4-docker.pkg.dev/braided-voyage-472209-n6/ml-services/auto-labeler:latest',
         command=[
             "python3", "component.py",
             "--raw-bucket-name", raw_bucket_name,
@@ -26,7 +26,7 @@ def dataset_splitter(
     data_yaml_artifact: Output[Artifact]
 ):
     return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/dataset-splitter:latest',
+        image='europe-west4-docker.pkg.dev/braided-voyage-472209-n6/ml-services/dataset-splitter:latest',
         command=[
             "python3", "component.py",
             "--bucket-name", bucket_name,
@@ -42,7 +42,7 @@ def yolo_trainer(
     model_artifact: Output[Artifact]
 ):
     return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:latest',
+        image='europe-west4-docker.pkg.dev/braided-voyage-472209-n6/ml-services/yolo-trainer:latest',
         command=[
             "python", "component.py",
             "--data-yaml-uri", data_yaml_uri,
@@ -59,7 +59,7 @@ def model_evaluator(
     decision: OutputPath(str)
 ):
     return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/model-evaluator:latest',
+        image='europe-west4-docker.pkg.dev/braided-voyage-472209-n6/ml-services/model-evaluator:latest',
         command=[
             "bash", "-c",
             f"python component.py --data-yaml-uri {data_yaml_uri} --new-model-uri {new_model_uri} --prod-model-uri {prod_model_uri} > {decision}"
@@ -92,11 +92,11 @@ def trigger_cd_pipeline(
     description='End-to-end pipeline for training and deploying glasses detection model'
 )
 def object_detection_pipeline(
-    project_id: str = "data-engineering-vm",
-    pipeline_root: str = "gs://glasses-temp/pipeline-root",
-    raw_bucket: str = "glasses-data",
-    processed_bucket: str = "glasses-data",
-    model_bucket: str = "glasses-model",
+    project_id: str = "braided-voyage-472209-n6",
+    pipeline_root: str = "gs://glasses-temp_daan/pipeline-root",
+    raw_bucket: str = "glasses-data_daan",
+    processed_bucket: str = "glasses-data_daan",
+    model_bucket: str = "glasses-model_daan",
     cd_trigger_id: str = "deploy-glasses-app"
 ):
     # Dynamic paths using pipeline context
