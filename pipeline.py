@@ -89,7 +89,7 @@ def object_detection_pipeline(
     raw_bucket: str = "glasses-data",
     processed_bucket: str = "glasses-data",
     model_bucket: str = "glasses-model",
-    cd_webhook_url: str = "https://cloudbuild.googleapis.com/v1/projects/data-engineering-vm/triggers/deploy-glasses-app-webhook:webhook?key=AIzaSyC_DDAlTTaytzyeYLxLFXLIZhu1sDe8Crc"
+    cd_webhook_url: str = "https://cloudbuild.googleapis.com/v1/projects/data-engineering-vm/triggers/deploy-glasses-app-webhook:webhook?key=API_KEY"
 ):
     # Dynamic paths using pipeline context
     processed_prefix = "labeled_data/run-{{$.pipeline_job_name}}"

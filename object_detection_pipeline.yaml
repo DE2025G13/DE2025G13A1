@@ -1,13 +1,3 @@
-# PIPELINE DEFINITION
-# Name: yolo-glasses-detection-pipeline
-# Description: End-to-end pipeline for training and deploying glasses detection model
-# Inputs:
-#    cd_webhook_url: str [Default: 'https://cloudbuild.googleapis.com/v1/projects/data-engineering-vm/triggers/deploy-glasses-app-webhook:webhook?key=AIzaSyC_DDAlTTaytzyeYLxLFXLIZhu1sDe8Crc']
-#    model_bucket: str [Default: 'glasses-model']
-#    pipeline_root: str [Default: 'gs://glasses-temp/pipeline-root']
-#    processed_bucket: str [Default: 'glasses-data']
-#    project_id: str [Default: 'data-engineering-vm']
-#    raw_bucket: str [Default: 'glasses-data']
 components:
   comp-auto-labeler:
     executorLabel: exec-auto-labeler
@@ -275,7 +265,7 @@ root:
   inputDefinitions:
     parameters:
       cd_webhook_url:
-        defaultValue: https://cloudbuild.googleapis.com/v1/projects/data-engineering-vm/triggers/deploy-glasses-app-webhook:webhook?key=AIzaSyC_DDAlTTaytzyeYLxLFXLIZhu1sDe8Crc
+        defaultValue: https://cloudbuild.googleapis.com/v1/projects/data-engineering-vm/triggers/deploy-glasses-app-webhook:webhook?key=API_KEY
         isOptional: true
         parameterType: STRING
       model_bucket:
