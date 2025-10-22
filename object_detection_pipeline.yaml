@@ -1,3 +1,13 @@
+# PIPELINE DEFINITION
+# Name: yolo-glasses-detection-pipeline
+# Description: End-to-end pipeline for training and deploying glasses detection model
+# Inputs:
+#    cd_trigger_id: str [Default: 'deploy-glasses-app']
+#    model_bucket: str [Default: 'glasses-model']
+#    pipeline_root: str [Default: 'gs://glasses-temp/pipeline-root']
+#    processed_bucket: str [Default: 'glasses-data']
+#    project_id: str [Default: 'data-engineering-vm']
+#    raw_bucket: str [Default: 'glasses-data']
 components:
   comp-auto-labeler:
     executorLabel: exec-auto-labeler
@@ -30,17 +40,21 @@ components:
                   constant: gs://{{$.inputs.parameters['pipelinechannel--model_bucket']}}/candidate_models/{{$.pipeline_job_name}}/best.pt
               pipelinechannel--model_bucket:
                 componentInputParameter: pipelinechannel--model_bucket
-              webhook_url:
-                componentInputParameter: pipelinechannel--cd_webhook_url
+              project_id:
+                componentInputParameter: pipelinechannel--project_id
+              trigger_id:
+                componentInputParameter: pipelinechannel--cd_trigger_id
           taskInfo:
             name: trigger-cd-pipeline
     inputDefinitions:
       parameters:
-        pipelinechannel--cd_webhook_url:
+        pipelinechannel--cd_trigger_id:
           parameterType: STRING
         pipelinechannel--model-evaluator-decision:
           parameterType: STRING
         pipelinechannel--model_bucket:
+          parameterType: STRING
+        pipelinechannel--project_id:
           parameterType: STRING
   comp-dataset-splitter:
     executorLabel: exec-dataset-splitter
@@ -76,7 +90,9 @@ components:
       parameters:
         new_model_uri:
           parameterType: STRING
-        webhook_url:
+        project_id:
+          parameterType: STRING
+        trigger_id:
           parameterType: STRING
   comp-yolo-trainer:
     executorLabel: exec-yolo-trainer
@@ -138,8 +154,12 @@ deploymentSpec:
         command:
         - bash
         - -c
-        - 'curl -X POST -H "Content-Type: application/json" -d ''{"substitutions":{"_NEW_MODEL_URI":"{{$.inputs.parameters[''new_model_uri'']}}"}}''
-          "{{$.inputs.parameters[''webhook_url'']}}"'
+        - "\n            set -e\n            ACCESS_TOKEN=$(gcloud auth print-access-token)\n\
+          \            curl -X POST -H \"Authorization: Bearer $ACCESS_TOKEN\"   \
+          \               -H \"Content-Type: application/json\"                  \"\
+          https://cloudbuild.googleapis.com/v1/projects/{{$.inputs.parameters['project_id']}}/triggers/{{$.inputs.parameters['trigger_id']}}:run\"\
+          \                  -d '{\"substitutions\":{\"_NEW_MODEL_URI\":\"{{$.inputs.parameters['new_model_uri']}}\"\
+          }}'\n            "
         image: google/cloud-sdk:slim
     exec-yolo-trainer:
       container:
@@ -188,14 +208,16 @@ root:
         - model-evaluator
         inputs:
           parameters:
-            pipelinechannel--cd_webhook_url:
-              componentInputParameter: cd_webhook_url
+            pipelinechannel--cd_trigger_id:
+              componentInputParameter: cd_trigger_id
             pipelinechannel--model-evaluator-decision:
               taskOutputParameter:
                 outputParameterKey: decision
                 producerTask: model-evaluator
             pipelinechannel--model_bucket:
               componentInputParameter: model_bucket
+            pipelinechannel--project_id:
+              componentInputParameter: project_id
         taskInfo:
           name: deploy-new-model
         triggerPolicy:
