@@ -1,17 +1,17 @@
 # PIPELINE DEFINITION
-# Name: yolo-glasses-detection-pipeline-canary-test
-# Description: A minimal test to see if a simple container can run on a GPU worker.
+# Name: yolo-trainer-debug-startup-test
+# Description: A barebones pipeline to test if the yolo-trainer:debug image can start on a GPU worker.
 # Inputs:
 #    pipeline_root: str [Default: 'gs://glasses-temp/pipeline-root']
 #    project_id: str [Default: 'data-engineering-vm']
 components:
-  comp-canary-test:
-    executorLabel: exec-canary-test
+  comp-yolo-trainer-debug-test:
+    executorLabel: exec-yolo-trainer-debug-test
 deploymentSpec:
   executors:
-    exec-canary-test:
+    exec-yolo-trainer-debug-test:
       container:
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/canary-test:latest
+        image: europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:debug
         resources:
           accelerator:
             count: '1'
@@ -19,18 +19,19 @@ deploymentSpec:
             resourceType: NVIDIA_TESLA_T4
             type: NVIDIA_TESLA_T4
 pipelineInfo:
-  description: A minimal test to see if a simple container can run on a GPU worker.
-  name: yolo-glasses-detection-pipeline-canary-test
+  description: A barebones pipeline to test if the yolo-trainer:debug image can start
+    on a GPU worker.
+  name: yolo-trainer-debug-startup-test
 root:
   dag:
     tasks:
-      canary-test:
+      yolo-trainer-debug-test:
         cachingOptions:
           enableCache: true
         componentRef:
-          name: comp-canary-test
+          name: comp-yolo-trainer-debug-test
         taskInfo:
-          name: canary-test
+          name: yolo-trainer-debug-test
   inputDefinitions:
     parameters:
       pipeline_root:

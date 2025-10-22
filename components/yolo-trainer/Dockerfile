@@ -3,7 +3,6 @@ FROM europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/ultralytics:lat
 RUN pip install google-cloud-storage
 
 WORKDIR /app
-
 COPY component.py .
 
-ENTRYPOINT ["python", "component.py"]
+ENTRYPOINT ["ls", "-la"]
