@@ -5,4 +5,4 @@ RUN pip install google-cloud-storage
 WORKDIR /app
 COPY component.py .
 
-ENTRYPOINT ["ls", "-la"]
+ENTRYPOINT ["python", "component.py"]
