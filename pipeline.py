@@ -68,14 +68,22 @@ def model_evaluator(
 
 @dsl.container_component
 def trigger_cd_pipeline(
-    webhook_url: str,
+    project_id: str,
+    trigger_id: str,
     new_model_uri: str
 ):
     return dsl.ContainerSpec(
         image='google/cloud-sdk:slim',
         command=[
             "bash", "-c",
-            f'curl -X POST -H "Content-Type: application/json" -d \'{{"substitutions":{{"_NEW_MODEL_URI":"{new_model_uri}"}}}}\' "{webhook_url}"'
+            f"""
+            set -e
+            ACCESS_TOKEN=$(gcloud auth print-access-token)
+            curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" \
+                 -H "Content-Type: application/json" \
+                 "https://cloudbuild.googleapis.com/v1/projects/{project_id}/triggers/{trigger_id}:run" \
+                 -d '{{"substitutions":{{"_NEW_MODEL_URI":"{new_model_uri}"}}}}'
+            """
         ]
     )
 
@@ -89,7 +97,7 @@ def object_detection_pipeline(
     raw_bucket: str = "glasses-data",
     processed_bucket: str = "glasses-data",
     model_bucket: str = "glasses-model",
-    cd_webhook_url: str = "https://cloudbuild.googleapis.com/v1/projects/data-engineering-vm/triggers/deploy-glasses-app-webhook:webhook?key=API_KEY"
+    cd_trigger_id: str = "deploy-glasses-app"
 ):
     # Dynamic paths using pipeline context
     processed_prefix = "labeled_data/run-{{$.pipeline_job_name}}"
@@ -142,7 +150,8 @@ def object_detection_pipeline(
         name="deploy-new-model"
     ):
         trigger_cd_pipeline(
-            webhook_url=cd_webhook_url,
+            project_id=project_id,
+            trigger_id=cd_trigger_id,
             new_model_uri=new_model_gcs_uri
         )
 

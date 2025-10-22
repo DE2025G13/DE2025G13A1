@@ -264,8 +264,8 @@ root:
           name: yolo-trainer
   inputDefinitions:
     parameters:
-      cd_webhook_url:
-        defaultValue: https://cloudbuild.googleapis.com/v1/projects/data-engineering-vm/triggers/deploy-glasses-app-webhook:webhook?key=API_KEY
+      cd_trigger_id:
+        defaultValue: deploy-glasses-app
         isOptional: true
         parameterType: STRING
       model_bucket:
