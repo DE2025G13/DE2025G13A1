@@ -1,4 +1,2 @@
 ultralytics
-torch
-torchvision
 google-cloud-storage
