@@ -1,2 +1,0 @@
-ultralytics==8.0.196
-google-cloud-storage
