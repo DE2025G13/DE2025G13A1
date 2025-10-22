@@ -11,7 +11,7 @@ WORKDIR /app
 
 COPY requirements-gpu.txt .
 
-RUN pip install --no-cache-dir -r requirements-gpu.txt
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu118 -r requirements-gpu.txt
 
 COPY component.py .
 
