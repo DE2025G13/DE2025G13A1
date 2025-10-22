@@ -22,7 +22,7 @@ def train_detector(data_yaml_uri, output_bucket_name, output_blob_name):
         logging.info("Starting model training...")
         results = model.train(
             data=data_yaml_uri,
-            epochs=50,
+            epochs=3,
             imgsz=640,
             project='/app/runs',
             name='glasses_detector_training'
