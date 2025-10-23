@@ -1,68 +1,38 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, render_template
+import requests
 import os
-from google.cloud import storage
-import tempfile
-import cv2
-import numpy as np
-import base64
-from ultralytics import YOLO
 
 app = Flask(__name__)
+PREDICTOR_API_URL = os.environ.get("PREDICTOR_API_URL")
 
-MODEL_BUCKET = os.environ.get("MODEL_BUCKET")
-MODEL_BLOB = "production_model/best.pt"
-_, model_file = tempfile.mkstemp(suffix=".pt")
-model = None
-
-if MODEL_BUCKET:
-    try:
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(MODEL_BUCKET)
-        blob = bucket.blob(MODEL_BLOB)
-        blob.download_to_filename(model_file)
-        model = YOLO(model_file)
-        print("YOLOv8 model loaded successfully from GCS.")
-    except Exception as e:
-        print(f"Error loading model from GCS: {e}")
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    if not model:
-        return jsonify({'error': 'Model is not loaded'}), 500
-    
-    file = request.files.get('file')
-    if not file: return jsonify({'error': 'No file part'}), 400
+    if not PREDICTOR_API_URL:
+        return render_template('result.html', error="Predictor API URL not configured on the server.")
+
+    try:
+        form_data = request.form.to_dict()
         
-    img_bytes = file.read()
-    nparr = np.frombuffer(img_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        # Convert all form values from string to float
+        for key, value in form_data.items():
+            form_data[key] = float(value)
 
-    results = model(img)
-    
-    result = results[0]
-    if len(result.boxes) == 0:
-        return jsonify({'error': 'No face detected by model'}), 400
-
-    box = result.boxes[0]
-    coords = box.xyxy[0].tolist()
-    class_id = int(box.cls[0].item())
-    conf = box.conf[0].item()
-    label = result.names[class_id]
-    
-    x1, y1, x2, y2 = map(int, coords)
-    color = (0, 255, 0)
-    cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-    text_label = f"{label}: {conf:.2f}"
-    cv2.putText(img, text_label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-    
-    _, buffer = cv2.imencode('.jpg', img)
-    img_base64 = base64.b64encode(buffer).decode('utf-8')
-
-    return jsonify({
-        'prediction': label,
-        'confidence': conf,
-        'image_with_box': img_base64
-    })
+        response = requests.post(f"{PREDICTOR_API_URL}/predict", json=form_data, timeout=20)
+        response.raise_for_status() 
+        
+        data = response.json()
+        if 'error' in data:
+             return render_template('result.html', error=data['error'])
+        
+        return render_template('result.html', prediction=data.get('prediction'))
+    except requests.exceptions.RequestException as e:
+        return render_template('result.html', error=f"Could not connect to the prediction API: {e}")
+    except Exception as e:
+        return render_template('result.html', error=f"An unexpected error occurred: {e}")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))

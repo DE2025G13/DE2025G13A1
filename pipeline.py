@@ -1,68 +1,63 @@
 import kfp
 from kfp import dsl
-from kfp.dsl import Output, Artifact, OutputPath
+from kfp.dsl import Input, Output, Artifact, Model, OutputPath
 
 @dsl.container_component
-def auto_labeler(
-    raw_bucket_name: str,
-    processed_bucket_name: str,
-    processed_prefix: str,
-    labeled_dataset: Output[Artifact]
+def preprocess_data(
+    data_bucket_name: str,
+    raw_data_path: str,
+    processed_data: dsl.Output[dsl.Dataset],
 ):
+    """Initial component to load, split, and process the raw data."""
     return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/auto-labeler:latest',
-        command=[
-            "python3", "component.py",
-            "--raw-bucket-name", raw_bucket_name,
-            "--processed-bucket-name", processed_bucket_name,
-            "--processed-prefix", processed_prefix,
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-preprocessor:latest',
+        command=["python3", "component.py"],
+        args=[
+            "--data-bucket-name", data_bucket_name,
+            "--raw-data-path", raw_data_path,
+            "--processed-data-path", processed_data.path,
         ]
     )
 
 @dsl.container_component
-def dataset_splitter(
-    bucket_name: str,
-    prefix: str,
-    data_yaml_artifact: Output[Artifact]
+def train_model(
+    image_url: str,
+    processed_data: dsl.Input[dsl.Dataset],
+    model: dsl.Output[dsl.Model],
 ):
+    """A generic training component that takes a Docker image URL."""
     return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/dataset-splitter:latest',
-        command=[
-            "python3", "component.py",
-            "--bucket-name", bucket_name,
-            "--prefix", prefix,
+        image=image_url,
+        command=["python3", "component.py"],
+        args=[
+            "--processed-data-path", processed_data.path,
+            "--model-artifact-path", model.path,
         ]
     )
 
 @dsl.container_component
-def yolo_trainer(
-    data_yaml_uri: str,
-    output_bucket_name: str,
-    output_blob_name: str,
-    model_artifact: Output[Artifact]
+def evaluate_models(
+    processed_data: dsl.Input[dsl.Dataset],
+    decision_tree_model: dsl.Input[dsl.Model],
+    linear_regression_model: dsl.Input[dsl.Model],
+    logistic_regression_model: dsl.Input[dsl.Model],
+    model_bucket_name: str,
+    prod_model_blob: str,
+    decision: OutputPath(str),
 ):
+    """Evaluates models and PRINTS the GCS URI of the best model or 'keep_old' to stdout."""
     return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:latest',
-        command=[
-            "python", "component.py",
-            "--data-yaml-uri", data_yaml_uri,
-            "--output-bucket-name", output_bucket_name,
-            "--output-blob-name", output_blob_name
-        ]
-    )
-
-@dsl.container_component
-def model_evaluator(
-    data_yaml_uri: str,
-    new_model_uri: str,
-    prod_model_uri: str,
-    decision: OutputPath(str)
-):
-    return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/model-evaluator:latest',
-        command=[
-            "bash", "-c",
-            f"python component.py --data-yaml-uri {data_yaml_uri} --new-model-uri {new_model_uri} --prod-model-uri {prod_model_uri} > {decision}"
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',
+        command=["bash", "-c"],
+        args=[
+            f"python component.py "
+            f"--processed-data-path {processed_data.path} "
+            f"--decision-tree-model-path {decision_tree_model.path} "
+            f"--linear-regression-model-path {linear_regression_model.path} "
+            f"--logistic-regression-model-path {logistic_regression_model.path} "
+            f"--model-bucket-name {model_bucket_name} "
+            f"--prod-model-blob {prod_model_blob} "
+            f"> {decision}"
         ]
     )
 
@@ -70,95 +65,71 @@ def model_evaluator(
 def trigger_cd_pipeline(
     project_id: str,
     trigger_id: str,
-    new_model_uri: str
+    new_model_uri: str,
 ):
+    """Triggers the Cloud Build deployment pipeline."""
     return dsl.ContainerSpec(
-        image='google/cloud-sdk:slim',
-        command=[
-            "bash", "-c",
-            f"""
-            set -e
-            ACCESS_TOKEN=$(gcloud auth print-access-token)
-            curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" \
-                 -H "Content-Type: application/json" \
-                 "https://cloudbuild.googleapis.com/v1/projects/{project_id}/triggers/{trigger_id}:run" \
-                 -d '{{"substitutions":{{"_NEW_MODEL_URI":"{new_model_uri}"}}}}'
-            """
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest',
+        command=["python3", "component.py"],
+        args=[
+            "--project-id", project_id,
+            "--trigger-id", trigger_id,
+            "--new-model-uri", new_model_uri,
+            "--best-model-name", "best_model"
         ]
     )
 
 @dsl.pipeline(
-    name='yolo-glasses-detection-pipeline',
-    description='End-to-end pipeline for training and deploying glasses detection model'
+    name='wine-quality-training-pipeline',
+    description='Trains, evaluates, and triggers deployment for a wine quality model.'
 )
-def object_detection_pipeline(
+def wine_quality_pipeline(
     project_id: str = "data-engineering-vm",
-    pipeline_root: str = "gs://glasses-temp/pipeline-root",
-    raw_bucket: str = "glasses-data",
-    processed_bucket: str = "glasses-data",
-    model_bucket: str = "glasses-model",
-    cd_trigger_id: str = "deploy-glasses-app"
+    data_bucket: str = "yannick-wine-data",
+    model_bucket: str = "yannick-wine-models",
+    pipeline_root: str = "gs://yannick-wine-pipeline-root",
+    cd_trigger_id: str = "deploy-wine-app-trigger"
 ):
-    # Dynamic paths using pipeline context
-    processed_prefix = "labeled_data/run-{{$.pipeline_job_name}}"
-    new_model_blob = "candidate_models/{{$.pipeline_job_name}}/best.pt"
-
-    # Step 1: Auto-label the raw images
-    labeling_task = auto_labeler(
-        raw_bucket_name=raw_bucket,
-        processed_bucket_name=processed_bucket,
-        processed_prefix=processed_prefix
+    preprocess_task = preprocess_data(
+        data_bucket_name=data_bucket,
+        raw_data_path="raw/WineQT.csv"
     )
 
-    # Step 2: Split dataset into train/val/test
-    splitting_task = dataset_splitter(
-        bucket_name=processed_bucket,
-        prefix=processed_prefix
-    ).after(labeling_task)
+    train_dt_task = train_model(
+        image_url='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest',
+        processed_data=preprocess_task.outputs["processed_data"]
+    )
+    train_lr_task = train_model(
+        image_url='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-lr:latest',
+        processed_data=preprocess_task.outputs["processed_data"]
+    )
+    train_logr_task = train_model(
+        image_url='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-logr:latest',
+        processed_data=preprocess_task.outputs["processed_data"]
+    )
     
-    # Construct the data.yaml GCS path
-    data_yaml_gcs_uri = f"gs://{processed_bucket}/{processed_prefix}/data.yaml"
+    evaluation_task = evaluate_models(
+        processed_data=preprocess_task.outputs["processed_data"],
+        decision_tree_model=train_dt_task.outputs["model"],
+        linear_regression_model=train_lr_task.outputs["model"],
+        logistic_regression_model=train_logr_task.outputs["model"],
+        model_bucket_name=model_bucket,
+        prod_model_blob="production_model/model.joblib"
+    )
+    
+    evaluation_task.set_caching_options(enable_caching=False)
 
-    # Step 3: Train YOLOv8 model
-    training_task = yolo_trainer(
-        data_yaml_uri=data_yaml_gcs_uri,
-        output_bucket_name=model_bucket,
-        output_blob_name=new_model_blob
-    ).after(splitting_task)
-    
-    # Configure GPU for training task
-    training_task.set_gpu_limit(1)
-    training_task.set_accelerator_type('NVIDIA_TESLA_T4')
-    
-    # Construct the new model GCS path
-    new_model_gcs_uri = f"gs://{model_bucket}/{new_model_blob}"
-
-    # Step 4: Evaluate new model against production model
-    evaluation_task = model_evaluator(
-        data_yaml_uri=data_yaml_gcs_uri,
-        new_model_uri=new_model_gcs_uri,
-        prod_model_uri=f"gs://{model_bucket}/production_model/best.pt"
-    ).after(training_task)
-    
-    # Configure GPU for evaluation task
-    evaluation_task.set_gpu_limit(1)
-    evaluation_task.set_accelerator_type('NVIDIA_TESLA_T4')
-
-    # Step 5: Conditionally trigger CD pipeline if new model is better
-    with dsl.Condition(
-        evaluation_task.outputs['decision'] == "deploy",
-        name="deploy-new-model"
-    ):
+    with dsl.Condition(evaluation_task.outputs["decision"] != "keep_old", name="if-new-model-is-better"):
         trigger_cd_pipeline(
             project_id=project_id,
             trigger_id=cd_trigger_id,
-            new_model_uri=new_model_gcs_uri
+            new_model_uri=evaluation_task.outputs["decision"],
         )
 
 if __name__ == '__main__':
-    from kfp.compiler import Compiler
-    Compiler().compile(
-        pipeline_func=object_detection_pipeline,
-        package_path='object_detection_pipeline.yaml'
+    from kfp import compiler
+    compiler.Compiler(mode=dsl.PipelineExecutionMode.V1_LEGACY).compile(
+        pipeline_func=wine_quality_pipeline,
+        package_path='wine_quality_pipeline.json'
     )
-    print("Pipeline compiled successfully to 'object_detection_pipeline.yaml'")
+    print("\nPipeline compiled successfully to wine_quality_pipeline.json using V1_LEGACY mode.\n")

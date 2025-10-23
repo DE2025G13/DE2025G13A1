@@ -1,22 +1,26 @@
-options:
-  logging: CLOUD_LOGGING_ONLY
-
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/auto-labeler:latest', '.']
-  dir: 'components/auto-labeler'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-preprocessor:latest', '.']
+  dir: 'components/data-preprocessor'
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/dataset-splitter:latest', '.']
-  dir: 'components/dataset-splitter'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest', '.']
+  dir: 'components/model-trainers/decision-tree'
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:latest', '.']
-  dir: 'components/yolo-trainer'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-lr:latest', '.']
+  dir: 'components/model-trainers/linear-regression'
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/model-evaluator:latest', '.']
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-logr:latest', '.']
+  dir: 'components/model-trainers/logistic-regression'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest', '.']
   dir: 'components/model-evaluator'
-
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest', '.']
+  dir: 'components/trigger-cd'
 images:
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/auto-labeler:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/dataset-splitter:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/model-evaluator:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-preprocessor:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-lr:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-logr:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest'

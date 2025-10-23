@@ -4,27 +4,36 @@
     <meta charset="utf-8">
     <title>Prediction Result</title>
     <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f4; color: #333; }
-        .container { background: white; padding: 20px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h1 { color: #0056b3; }
-        img { margin-top: 20px; border: 2px solid #ddd; border-radius: 4px; max-width: 90%; height: auto; }
-        a { color: #0056b3; text-decoration: none; font-weight: bold; }
-        .error { color: #d9534f; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #f8f9fa; }
+        .container { display: inline-block; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1 { color: #343a40; }
+        .quality-score { width: 150px; height: 150px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 3.5em; color: white; font-weight: bold; margin: 20px auto; border: 5px solid rgba(255,255,255,0.5); box-shadow: 0 0 20px rgba(0,0,0,0.2); }
+        a { margin-top: 25px; display: inline-block; color: #007bff; text-decoration: none; font-size: 1.1em; }
+        a:hover { text-decoration: underline; }
+        .error { color: #dc3545; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Prediction Result</h1>
+        <h1>Predicted Wine Quality</h1>
         {% if error %}
-            <p class="error">An error occurred: <strong>{{ error }}</strong></p>
-        {% elif image_with_box %}
-            <p>The model predicts: <strong>{{ prediction }}</strong> with <strong>{{ confidence }}</strong> confidence.</p>
-            <img src="data:image/jpeg;base64,{{ image_with_box }}" alt="Result Image">
+            <p class="error">An error occurred: {{ error }}</p>
         {% else %}
-            <p>No result to display.</p>
+            <div class="quality-score" id="quality-score">{{ prediction }}</div>
         {% endif %}
-        <br><br>
-        <a href="/">Try another one</a>
+        <a href="/">Try another prediction</a>
     </div>
+
+    <script>
+        const quality = {{ prediction or 5 }}; // Default to 5 if no prediction
+        const scoreElement = document.getElementById('quality-score');
+        
+        const minQuality = 3;
+        const maxQuality = 8;
+        const normalizedQuality = Math.max(0, Math.min(1, (quality - minQuality) / (maxQuality - minQuality)));
+        const hue = normalizedQuality * 120; // 0 is red, 120 is green
+        
+        scoreElement.style.backgroundColor = `hsl(${hue}, 80%, 50%)`;
+    </script>
 </body>
 </html>

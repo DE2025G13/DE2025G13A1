@@ -1,54 +1,91 @@
 import argparse
-import os
-from ultralytics import YOLO
+import pandas as pd
+import joblib
+from sklearn.metrics import accuracy_score
 from google.cloud import storage
 
-def evaluate_detectors(data_yaml_uri, new_model_uri, prod_model_uri):
-    storage_client = storage.Client()
-    
-    def download_blob(uri, destination_file_name):
-        bucket_name, blob_name = uri.replace("gs://", "").split("/", 1)
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(blob_name)
-        blob.download_to_filename(destination_file_name)
-        print(f"Downloaded {uri} to {destination_file_name}")
+def evaluate_and_decide(
+    processed_data_path: str,
+    decision_tree_model_path: str,
+    linear_regression_model_path: str,
+    logistic_regression_model_path: str,
+    model_bucket_name: str,
+    prod_model_blob: str
+):
+    """
+    Evaluates models and PRINTS the GCS URI of the best model if it's better
+    than production, otherwise PRINTS 'keep_old'.
+    """
+    X_test = pd.read_csv(f"{processed_data_path}/x_test.csv")
+    y_test = pd.read_csv(f"{processed_data_path}/y_test.csv").values.ravel()
 
-    os.makedirs('/app/models', exist_ok=True)
-    local_new_model = '/app/models/new_model.pt'
-    local_prod_model = '/app/models/prod_model.pt'
+    models = {
+        "decision_tree": decision_tree_model_path,
+        "linear_regression": linear_regression_model_path,
+        "logistic_regression": logistic_regression_model_path,
+    }
     
-    download_blob(new_model_uri, local_new_model)
-    new_model = YOLO(local_new_model)
-    
-    try:
-        download_blob(prod_model_uri, local_prod_model)
-        prod_model = YOLO(local_prod_model)
-    except Exception as e:
-        print(f"Could not load production model. Assuming new model is better. Error: {e}")
-        prod_model = None
+    best_model_name = ""
+    best_model_score = -1.0
 
-    print("Evaluating new model...")
-    new_metrics = new_model.val(data=data_yaml_uri, split='test')
-    new_map = new_metrics.box.map
-    print(f"New model mAP50-95: {new_map}")
+    for name, path in models.items():
+        model = joblib.load(path)
+        y_pred = model.predict(X_test)
 
-    if prod_model:
-        print("Evaluating production model...")
-        prod_metrics = prod_model.val(data=data_yaml_uri, split='test')
-        prod_map = prod_metrics.box.map
-        print(f"Production model mAP50-95: {prod_map}")
+        if name == "linear_regression":
+             y_pred = [round(p) for p in y_pred]
         
-        if new_map > prod_map:
-            print("deploy")
+        score = accuracy_score(y_test, y_pred)
+        print(f"DEBUG: Model '{name}' accuracy: {score}")
+
+        if score > best_model_score:
+            best_model_score = score
+            best_model_name = name
+
+    print(f"DEBUG: Best candidate is '{best_model_name}' with accuracy: {best_model_score}")
+
+    storage_client = storage.Client()
+    prod_score = -1.0
+    try:
+        bucket = storage_client.bucket(model_bucket_name)
+        blob = bucket.blob(prod_model_blob)
+        if blob.exists():
+            local_prod_model = "/tmp/prod_model.joblib"
+            blob.download_to_filename(local_prod_model)
+            prod_model = joblib.load(local_prod_model)
+            y_prod_pred = prod_model.predict(X_test)
+            
+            if "predict_proba" not in dir(prod_model):
+                 y_prod_pred = [round(p) for p in y_prod_pred]
+
+            prod_score = accuracy_score(y_test, y_prod_pred)
+            print(f"DEBUG: Production model accuracy: {prod_score}")
         else:
-            print("keep_old")
+            print("DEBUG: No production model found.")
+    except Exception as e:
+        print(f"DEBUG: Could not load or evaluate production model. Error: {e}")
+
+    if best_model_score > prod_score:
+        best_model_uri = models[best_model_name].replace("/gcs/", "gs://")
+        print(best_model_uri)
     else:
-        print("deploy")
+        print("keep_old")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data-yaml-uri', type=str, required=True)
-    parser.add_argument('--new-model-uri', type=str, required=True)
-    parser.add_argument('--prod-model-uri', type=str, required=True)
+    parser.add_argument('--processed-data-path', type=str, required=True)
+    parser.add_argument('--decision-tree-model-path', type=str, required=True)
+    parser.add_argument('--linear-regression-model-path', type=str, required=True)
+    parser.add_argument('--logistic-regression-model-path', type=str, required=True)
+    parser.add_argument('--model-bucket-name', type=str, required=True)
+    parser.add_argument('--prod-model-blob', type=str, required=True)
+    
     args = parser.parse_args()
-    evaluate_detectors(args.data_yaml_uri, args.new_model_uri, args.prod_model_uri)
+    evaluate_and_decide(
+        args.processed_data_path,
+        args.decision_tree_model_path,
+        args.linear_regression_model_path,
+        args.logistic_regression_model_path,
+        args.model_bucket_name,
+        args.prod_model_blob
+    )
