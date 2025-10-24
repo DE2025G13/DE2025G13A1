@@ -8,7 +8,6 @@ def preprocess_data(data_bucket_name: str, raw_data_path: str, processed_prefix:
     storage_client = storage.Client()
     bucket = storage_client.bucket(data_bucket_name)
 
-    # Download raw data
     local_raw_path = "/tmp/winequality.csv"
     bucket.blob(raw_data_path).download_to_filename(local_raw_path)
 
@@ -20,7 +19,6 @@ def preprocess_data(data_bucket_name: str, raw_data_path: str, processed_prefix:
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    # Save files locally first
     local_dir = "/tmp/processed"
     os.makedirs(local_dir, exist_ok=True)
     X_train.to_csv(f"{local_dir}/x_train.csv", index=False)
@@ -28,7 +26,6 @@ def preprocess_data(data_bucket_name: str, raw_data_path: str, processed_prefix:
     X_test.to_csv(f"{local_dir}/x_test.csv", index=False)
     y_test.to_csv(f"{local_dir}/y_test.csv", index=False)
 
-    # Upload each processed file to GCS
     for filename in os.listdir(local_dir):
         blob_path = os.path.join(processed_prefix, filename)
         blob = bucket.blob(blob_path)
