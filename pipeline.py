@@ -1,10 +1,10 @@
 from typing import NamedTuple
 from kfp import dsl
+# FIX: Import all necessary types from kfp.dsl
 from kfp.dsl import Input, Output, Model, Dataset, ContainerSpec
 
 # ==============================================================================
-# Component Definitions using the @dsl.component decorator returning a ContainerSpec
-# This is the definitive pattern for your KFP SDK version.
+# Component Definitions
 # ==============================================================================
 
 @dsl.component
@@ -63,7 +63,7 @@ def model_evaluator_op(
     logistic_regression_model: Input[Model],
     model_bucket_name: str,
     prod_model_blob: str,
-) -> NamedTuple("outputs", [("decision", str), ("best_model_uri", str)]):
+) -> NamedTuple("outputs", [("decision", str), ("best_model_uri", str), ("best_model_name", str)]): # IMPROVEMENT: Added best_model_name output
     """Factory for the model evaluator component."""
     return ContainerSpec(
         image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',
@@ -77,6 +77,7 @@ def model_evaluator_op(
             "--prod_model_blob", prod_model_blob,
             "--decision", dsl.OutputPath("decision"),
             "--best_model_uri", dsl.OutputPath("best_model_uri"),
+            "--best_model_name", dsl.OutputPath("best_model_name"), # IMPROVEMENT: Added best_model_name output path
         ]
     )
 
@@ -154,7 +155,7 @@ def wine_quality_pipeline(
             project_id=project_id,
             trigger_id=cd_trigger_id,
             new_model_uri=eval_task.outputs["best_model_uri"],
-            best_model_name="best-model"
+            best_model_name=eval_task.outputs["best_model_name"] # IMPROVEMENT: Use dynamic model name
         )
 
 if __name__ == '__main__':
