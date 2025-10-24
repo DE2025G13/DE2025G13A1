@@ -1,84 +1,77 @@
 import kfp
 from kfp import dsl
-from kfp.dsl import Input, Output, Artifact, Model, OutputPath
+from kfp import compiler
+from kfp.dsl import Input, Output, Dataset, Model
 
-@dsl.container_component
+# Component: Preprocess Data
+# Uses the modern @dsl.component decorator for clarity and stability.
+@dsl.component(
+    base_image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-preprocessor:latest',
+)
 def preprocess_data(
     data_bucket_name: str,
     raw_data_path: str,
-    processed_data: dsl.Output[dsl.Dataset],
+    processed_data: Output[Dataset],
 ):
-    """Initial component to load, split, and process the raw data."""
-    return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-preprocessor:latest',
-        command=["python3", "component.py"],
-        args=[
-            "--data-bucket-name", data_bucket_name,
-            "--raw-data-path", raw_data_path,
-            "--processed-data-path", processed_data.path,
-        ]
-    )
+    pass
 
-@dsl.container_component
+# Component: Generic Model Trainer
+@dsl.component
 def train_model(
     image_url: str,
-    processed_data: dsl.Input[dsl.Dataset],
-    model: dsl.Output[dsl.Model],
+    processed_data: Input[Dataset],
+    model: Output[Model],
 ):
-    """A generic training component that takes a Docker image URL."""
     return dsl.ContainerSpec(
         image=image_url,
-        command=["python3", "component.py"],
-        args=[
-            "--processed-data-path", processed_data.path,
-            "--model-artifact-path", model.path,
+        command=[
+            "python3",
+            "component.py",
+            "--processed-data-path",
+            processed_data.path,
+            "--model-artifact-path",
+            model.path,
         ]
     )
 
-@dsl.container_component
+# Component: Evaluate Models
+@dsl.component
 def evaluate_models(
-    processed_data: dsl.Input[dsl.Dataset],
-    decision_tree_model: dsl.Input[dsl.Model],
-    linear_regression_model: dsl.Input[dsl.Model],
-    logistic_regression_model: dsl.Input[dsl.Model],
+    processed_data: Input[Dataset],
+    decision_tree_model: Input[Model],
+    linear_regression_model: Input[Model],
+    logistic_regression_model: Input[Model],
     model_bucket_name: str,
     prod_model_blob: str,
-    decision: OutputPath(str),
-):
-    """Evaluates models and PRINTS the GCS URI of the best model or 'keep_old' to stdout."""
+) -> str:
+    """Evaluates models and returns 'deploy' or 'keep_old'."""
     return dsl.ContainerSpec(
         image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',
-        command=["bash", "-c"],
-        args=[
-            f"python component.py "
-            f"--processed-data-path {processed_data.path} "
-            f"--decision-tree-model-path {decision_tree_model.path} "
-            f"--linear-regression-model-path {linear_regression_model.path} "
-            f"--logistic-regression-model-path {logistic_regression_model.path} "
-            f"--model-bucket-name {model_bucket_name} "
-            f"--prod-model-blob {prod_model_blob} "
-            f"> {decision}"
+        command=[
+            "python3", "component.py",
+            "--processed-data-path", processed_data.path,
+            "--decision-tree-model-path", decision_tree_model.path,
+            "--linear-regression-model-path", linear_regression_model.path,
+            "--logistic-regression-model-path", logistic_regression_model.path,
+            "--model-bucket-name", model_bucket_name,
+            "--prod-model-blob", prod_model_blob,
+            "--output-path", dsl.OutputPath(str),
         ]
     )
 
-@dsl.container_component
+# Component: Trigger Cloud Build CD Pipeline
+@dsl.component(
+    base_image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest',
+)
 def trigger_cd_pipeline(
     project_id: str,
     trigger_id: str,
     new_model_uri: str,
 ):
     """Triggers the Cloud Build deployment pipeline."""
-    return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest',
-        command=["python3", "component.py"],
-        args=[
-            "--project-id", project_id,
-            "--trigger-id", trigger_id,
-            "--new-model-uri", new_model_uri,
-            "--best-model-name", "best_model"
-        ]
-    )
+    pass
 
+# The main pipeline definition
 @dsl.pipeline(
     name='wine-quality-training-pipeline',
     description='Trains, evaluates, and triggers deployment for a wine quality model.'
@@ -87,14 +80,15 @@ def wine_quality_pipeline(
     project_id: str = "data-engineering-vm",
     data_bucket: str = "yannick-wine-data",
     model_bucket: str = "yannick-wine-models",
-    pipeline_root: str = "gs://yannick-wine-pipeline-root",
     cd_trigger_id: str = "deploy-wine-app-trigger"
 ):
+    # Step 1: Preprocess the data
     preprocess_task = preprocess_data(
         data_bucket_name=data_bucket,
         raw_data_path="raw/WineQT.csv"
     )
 
+    # Step 2: Train all three models in parallel
     train_dt_task = train_model(
         image_url='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest',
         processed_data=preprocess_task.outputs["processed_data"]
@@ -108,6 +102,7 @@ def wine_quality_pipeline(
         processed_data=preprocess_task.outputs["processed_data"]
     )
     
+    # Step 3: Evaluate the models after they are all trained
     evaluation_task = evaluate_models(
         processed_data=preprocess_task.outputs["processed_data"],
         decision_tree_model=train_dt_task.outputs["model"],
@@ -119,17 +114,17 @@ def wine_quality_pipeline(
     
     evaluation_task.set_caching_options(enable_caching=False)
 
-    with dsl.Condition(evaluation_task.outputs["decision"] != "keep_old", name="if-new-model-is-better"):
+    # Step 4: Conditionally trigger the deployment pipeline
+    with dsl.If(evaluation_task.output != "keep_old", name="if-new-model-is-better"):
         trigger_cd_pipeline(
             project_id=project_id,
             trigger_id=cd_trigger_id,
-            new_model_uri=evaluation_task.outputs["decision"],
+            new_model_uri=evaluation_task.output,
         )
 
 if __name__ == '__main__':
-    from kfp import compiler
-    compiler.Compiler(mode=dsl.PipelineExecutionMode.V1_LEGACY).compile(
+    compiler.Compiler().compile(
         pipeline_func=wine_quality_pipeline,
-        package_path='wine_quality_pipeline.json'
+        package_path='wine_quality_pipeline.yaml'
     )
-    print("\nPipeline compiled successfully to wine_quality_pipeline.json using V1_LEGACY mode.\n")
+    print("\nPipeline compiled successfully to wine_quality_pipeline.yaml\n")
