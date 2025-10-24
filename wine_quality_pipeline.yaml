@@ -1,5 +1,5 @@
 # PIPELINE DEFINITION
-# Name: wine-quality-end-to-end-pipeline-v4
+# Name: wine-quality-end-to-end-pipeline-v5
 # Inputs:
 #    cd_trigger_id: str [Default: 'deploy-wine-app-trigger']
 #    data_bucket: str [Default: 'yannick-wine-data']
@@ -47,9 +47,9 @@ components:
           parameterType: STRING
     outputDefinitions:
       artifacts:
-        raw_data:
+        raw_dataset:
           artifactType:
-            schemaTitle: system.Artifact
+            schemaTitle: system.Dataset
             schemaVersion: 0.0.1
   comp-model-evaluator:
     executorLabel: exec-model-evaluator
@@ -137,9 +137,9 @@ components:
     executorLabel: exec-train-test-splitter
     inputDefinitions:
       artifacts:
-        input_data:
+        input_dataset:
           artifactType:
-            schemaTitle: system.Artifact
+            schemaTitle: system.Dataset
             schemaVersion: 0.0.1
     outputDefinitions:
       artifacts:
@@ -192,14 +192,13 @@ deploymentSpec:
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef data_ingestion(\n    bucket_name: str,\n    blob_name: str,\n\
-          ) -> NamedTuple(\"outputs\", [(\"raw_data\", Artifact)]): # FIX: Use NamedTuple\
-          \ for single output\n    \"\"\"Downloads data from GCS and outputs it as\
-          \ a KFP Artifact.\"\"\"\n    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest',\n\
+          ) -> NamedTuple(\"outputs\", [(\"raw_dataset\", Dataset)]):\n    \"\"\"\
+          Downloads data from GCS and outputs it as a KFP Dataset Artifact.\"\"\"\n\
+          \    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest',\n\
           \        command=[\"python3\", \"component.py\"],\n        args=[\n    \
           \        \"--bucket-name\", bucket_name,\n            \"--blob-name\", blob_name,\n\
-          \            # FIX: The output path name must match the NamedTuple field\
-          \ name\n            \"--output-path\", dsl.OutputPath(\"raw_data\"),\n \
-          \       ],\n    )\n\n"
+          \            \"--output-dataset-path\", dsl.OutputPath(\"raw_dataset\"),\n\
+          \        ],\n    )\n\n"
         image: python:3.9
     exec-model-evaluator:
       container:
@@ -231,8 +230,10 @@ deploymentSpec:
           \ Input[Model],\n    linear_regression_model: Input[Model],\n    logistic_regression_model:\
           \ Input[Model],\n    model_bucket_name: str,\n    prod_model_blob: str,\n\
           ) -> NamedTuple(\"outputs\", [(\"decision\", str), (\"best_model_uri\",\
-          \ str)]):\n    \"\"\"Evaluates models and decides whether to deploy a new\
-          \ one.\"\"\"\n    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',\n\
+          \ str)]):\n    \"\"\"\n    Evaluates trained models against each other and\
+          \ the production model.\n    Outputs a decision ('deploy_new' or 'keep_old')\
+          \ and the best model's URI.\n    \"\"\"\n    return ContainerSpec(\n   \
+          \     image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',\n\
           \        command=[\"python3\", \"component.py\"],\n        args=[\n    \
           \        \"--testing_data_path\",\n            dsl.InputPath(testing_data),\n\
           \            \"--decision_tree_model_path\",\n            dsl.InputPath(decision_tree_model),\n\
@@ -271,12 +272,11 @@ deploymentSpec:
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef train_model(\n    image: str,\n    training_data: Input[Dataset]\n\
-          ) -> NamedTuple(\"outputs\", [(\"model\", Model)]): # FIX: Use NamedTuple\
-          \ for single output\n    \"\"\"A generic training component.\"\"\"\n   \
-          \ return ContainerSpec(\n        image=image,\n        command=[\"python3\"\
+          ) -> NamedTuple(\"outputs\", [(\"model\", Model)]):\n    \"\"\"A generic\
+          \ training component that accepts a specific container image.\"\"\"\n  \
+          \  return ContainerSpec(\n        image=image,\n        command=[\"python3\"\
           , \"component.py\"],\n        args=[\n            \"--training_data_path\"\
-          ,\n            dsl.InputPath(training_data),\n            # FIX: The output\
-          \ path name must match the NamedTuple field name\n            \"--model_artifact_path\"\
+          ,\n            dsl.InputPath(training_data),\n            \"--model_artifact_path\"\
           ,\n            dsl.OutputPath(\"model\"),\n        ],\n    )\n\n"
         image: python:3.9
     exec-train-model-2:
@@ -306,12 +306,11 @@ deploymentSpec:
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef train_model(\n    image: str,\n    training_data: Input[Dataset]\n\
-          ) -> NamedTuple(\"outputs\", [(\"model\", Model)]): # FIX: Use NamedTuple\
-          \ for single output\n    \"\"\"A generic training component.\"\"\"\n   \
-          \ return ContainerSpec(\n        image=image,\n        command=[\"python3\"\
+          ) -> NamedTuple(\"outputs\", [(\"model\", Model)]):\n    \"\"\"A generic\
+          \ training component that accepts a specific container image.\"\"\"\n  \
+          \  return ContainerSpec(\n        image=image,\n        command=[\"python3\"\
           , \"component.py\"],\n        args=[\n            \"--training_data_path\"\
-          ,\n            dsl.InputPath(training_data),\n            # FIX: The output\
-          \ path name must match the NamedTuple field name\n            \"--model_artifact_path\"\
+          ,\n            dsl.InputPath(training_data),\n            \"--model_artifact_path\"\
           ,\n            dsl.OutputPath(\"model\"),\n        ],\n    )\n\n"
         image: python:3.9
     exec-train-model-3:
@@ -341,12 +340,11 @@ deploymentSpec:
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef train_model(\n    image: str,\n    training_data: Input[Dataset]\n\
-          ) -> NamedTuple(\"outputs\", [(\"model\", Model)]): # FIX: Use NamedTuple\
-          \ for single output\n    \"\"\"A generic training component.\"\"\"\n   \
-          \ return ContainerSpec(\n        image=image,\n        command=[\"python3\"\
+          ) -> NamedTuple(\"outputs\", [(\"model\", Model)]):\n    \"\"\"A generic\
+          \ training component that accepts a specific container image.\"\"\"\n  \
+          \  return ContainerSpec(\n        image=image,\n        command=[\"python3\"\
           , \"component.py\"],\n        args=[\n            \"--training_data_path\"\
-          ,\n            dsl.InputPath(training_data),\n            # FIX: The output\
-          \ path name must match the NamedTuple field name\n            \"--model_artifact_path\"\
+          ,\n            dsl.InputPath(training_data),\n            \"--model_artifact_path\"\
           ,\n            dsl.OutputPath(\"model\"),\n        ],\n    )\n\n"
         image: python:3.9
     exec-train-test-splitter:
@@ -375,12 +373,12 @@ deploymentSpec:
 
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
-          \ *\n\ndef train_test_splitter(\n    input_data: Input[Artifact]\n) -> NamedTuple(\"\
-          outputs\", [(\"training_data\", Dataset), (\"testing_data\", Dataset)]):\n\
-          \    \"\"\"Splits the input data into training and testing datasets.\"\"\
-          \"\n    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest',\n\
+          \ *\n\ndef train_test_splitter(\n    input_dataset: Input[Dataset]\n) ->\
+          \ NamedTuple(\"outputs\", [(\"training_data\", Dataset), (\"testing_data\"\
+          , Dataset)]):\n    \"\"\"Splits the input Dataset into training and testing\
+          \ datasets.\"\"\"\n    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest',\n\
           \        command=[\"python3\", \"component.py\"],\n        args=[\n    \
-          \        \"--input-data-path\",\n            dsl.InputPath(input_data),\n\
+          \        \"--input-dataset-path\",\n            dsl.InputPath(input_dataset),\n\
           \            \"--training-data-path\",\n            dsl.OutputPath(\"training_data\"\
           ),\n            \"--testing-data-path\",\n            dsl.OutputPath(\"\
           testing_data\"),\n        ],\n    )\n\n"
@@ -413,15 +411,15 @@ deploymentSpec:
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef trigger_cd_pipeline(\n    project_id: str,\n    trigger_id: str,\n\
           \    new_model_uri: str,\n    best_model_name: str,\n):\n    \"\"\"Triggers\
-          \ the Cloud Build deployment pipeline.\"\"\"\n    return ContainerSpec(\n\
-          \        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest',\n\
+          \ the Cloud Build deployment pipeline if a new model is promoted.\"\"\"\n\
+          \    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest',\n\
           \        command=[\"python3\", \"component.py\"],\n        args=[\n    \
           \        \"--project-id\", project_id,\n            \"--trigger-id\", trigger_id,\n\
           \            \"--new-model-uri\", new_model_uri,\n            \"--best-model-name\"\
           , best_model_name,\n        ],\n    )\n\n"
         image: python:3.9
 pipelineInfo:
-  name: wine-quality-end-to-end-pipeline-v4
+  name: wine-quality-end-to-end-pipeline-v5
 root:
   dag:
     tasks:
@@ -564,9 +562,9 @@ root:
         - data-ingestion
         inputs:
           artifacts:
-            input_data:
+            input_dataset:
               taskOutputArtifact:
-                outputArtifactKey: raw_data
+                outputArtifactKey: raw_dataset
                 producerTask: data-ingestion
         taskInfo:
           name: train-test-splitter

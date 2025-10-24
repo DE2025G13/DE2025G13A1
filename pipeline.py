@@ -3,7 +3,6 @@ from kfp import dsl
 from kfp.dsl import (
     Input,
     Output,
-    Artifact,
     Model,
     Dataset,
     ContainerSpec,
@@ -13,29 +12,29 @@ from kfp.dsl import (
 def data_ingestion(
     bucket_name: str,
     blob_name: str,
-) -> NamedTuple("outputs", [("raw_data", Artifact)]):
-    """Downloads data from GCS and outputs it as a KFP Artifact."""
+) -> NamedTuple("outputs", [("raw_dataset", Dataset)]):
+    """Downloads data from GCS and outputs it as a KFP Dataset Artifact."""
     return ContainerSpec(
         image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest',
         command=["python3", "component.py"],
         args=[
             "--bucket-name", bucket_name,
             "--blob-name", blob_name,
-            "--output-path", dsl.OutputPath("raw_data"),
+            "--output-dataset-path", dsl.OutputPath("raw_dataset"),
         ],
     )
 
 @dsl.component
 def train_test_splitter(
-    input_data: Input[Artifact]
+    input_dataset: Input[Dataset]
 ) -> NamedTuple("outputs", [("training_data", Dataset), ("testing_data", Dataset)]):
-    """Splits the input data into training and testing datasets."""
+    """Splits the input Dataset into training and testing datasets."""
     return ContainerSpec(
         image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest',
         command=["python3", "component.py"],
         args=[
-            "--input-data-path",
-            dsl.InputPath(input_data),
+            "--input-dataset-path",
+            dsl.InputPath(input_dataset),
             "--training-data-path",
             dsl.OutputPath("training_data"),
             "--testing-data-path",
@@ -48,7 +47,7 @@ def train_model(
     image: str,
     training_data: Input[Dataset]
 ) -> NamedTuple("outputs", [("model", Model)]):
-    """A generic training component."""
+    """A generic training component that accepts a specific container image."""
     return ContainerSpec(
         image=image,
         command=["python3", "component.py"],
@@ -60,7 +59,6 @@ def train_model(
         ],
     )
 
-
 @dsl.component
 def model_evaluator(
     testing_data: Input[Dataset],
@@ -70,7 +68,10 @@ def model_evaluator(
     model_bucket_name: str,
     prod_model_blob: str,
 ) -> NamedTuple("outputs", [("decision", str), ("best_model_uri", str)]):
-    """Evaluates models and decides whether to deploy a new one."""
+    """
+    Evaluates trained models against each other and the production model.
+    Outputs a decision ('deploy_new' or 'keep_old') and the best model's URI.
+    """
     return ContainerSpec(
         image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',
         command=["python3", "component.py"],
@@ -101,7 +102,7 @@ def trigger_cd_pipeline(
     new_model_uri: str,
     best_model_name: str,
 ):
-    """Triggers the Cloud Build deployment pipeline."""
+    """Triggers the Cloud Build deployment pipeline if a new model is promoted."""
     return ContainerSpec(
         image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest',
         command=["python3", "component.py"],
@@ -113,25 +114,25 @@ def trigger_cd_pipeline(
         ],
     )
 
-@dsl.pipeline(name='wine-quality-end-to-end-pipeline-v4')
+@dsl.pipeline(name='wine-quality-end-to-end-pipeline-v5')
 def wine_quality_pipeline(
     project_id: str = "data-engineering-vm",
     data_bucket: str = "yannick-wine-data",
     model_bucket: str = "yannick-wine-models",
     cd_trigger_id: str = "deploy-wine-app-trigger"
 ):
-    # Step 1: Ingest the raw data from GCS
+    # Step 1: Ingest the raw data from GCS into a Dataset artifact
     ingestion_task = data_ingestion(
         bucket_name=data_bucket,
         blob_name="raw/WineQT.csv"
     )
 
-    # Step 2: Split the data into training and testing sets
+    # Step 2: Preprocess and split the data into training and testing sets
     split_task = train_test_splitter(
-        input_data=ingestion_task.outputs["raw_data"]
+        input_dataset=ingestion_task.outputs["raw_dataset"]
     )
 
-    # Step 3: Train all models in parallel
+    # Step 3: Train all models in parallel using the training dataset
     dt_task = train_model(
         image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest',
         training_data=split_task.outputs["training_data"]
@@ -145,7 +146,7 @@ def wine_quality_pipeline(
         training_data=split_task.outputs["training_data"]
     )
 
-    # Step 4: Evaluate the trained models against each other and the production model
+    # Step 4: Evaluate the trained models against the production model using the testing dataset
     eval_task = model_evaluator(
         testing_data=split_task.outputs["testing_data"],
         decision_tree_model=dt_task.outputs["model"],
@@ -156,7 +157,7 @@ def wine_quality_pipeline(
     )
     eval_task.set_caching_options(enable_caching=False)
 
-    # Step 5: Conditionally trigger the deployment pipeline
+    # Step 5: Conditionally trigger the deployment pipeline if a new model is better
     with dsl.If(eval_task.outputs["decision"] == "deploy_new", name="if-new-model-is-better"):
         trigger_cd_pipeline(
             project_id=project_id,

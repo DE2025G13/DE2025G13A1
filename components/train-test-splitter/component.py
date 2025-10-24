@@ -3,14 +3,21 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import os
 
-def split_data(input_data_path: str, training_data_path: str, testing_data_path: str):
+def split_data(input_dataset_path: str, training_data_path: str, testing_data_path: str):
     """
-    Reads data, drops unneeded columns, splits it, and saves the training and
-    testing sets to separate artifact locations.
+    Reads data from an input Dataset artifact, drops unneeded columns, splits it,
+    and saves the training and testing sets to new Dataset artifacts.
     """
-    df = pd.read_csv(input_data_path)
+    input_file = os.path.join(input_dataset_path, "data.csv")
+    
+    print(f"Loading data from {input_file}")
+    df = pd.read_csv(input_file)
+
     if "Id" in df.columns:
+        print("Found 'Id' column. Dropping it.")
         df.drop(columns="Id", inplace=True)
+    else:
+        print("No 'Id' column found to drop.")
 
     X = df.drop(columns=["quality"])
     y = df["quality"]
@@ -31,8 +38,8 @@ def split_data(input_data_path: str, training_data_path: str, testing_data_path:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input-data-path', type=str, required=True)
+    parser.add_argument('--input-dataset-path', type=str, required=True)
     parser.add_argument('--training-data-path', type=str, required=True)
     parser.add_argument('--testing-data-path', type=str, required=True)
     args = parser.parse_args()
-    split_data(args.input_data_path, args.training_data_path, args.testing_data_path)
+    split_data(args.input_dataset_path, args.training_data_path, args.testing_data_path)
