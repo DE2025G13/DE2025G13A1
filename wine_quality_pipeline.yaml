@@ -17,8 +17,7 @@ components:
           inputs:
             parameters:
               best_model_name:
-                runtimeValue:
-                  constant: best-model
+                componentInputParameter: pipelinechannel--model-evaluator-op-best_model_name
               new_model_uri:
                 componentInputParameter: pipelinechannel--model-evaluator-op-best_model_uri
               project_id:
@@ -30,6 +29,8 @@ components:
     inputDefinitions:
       parameters:
         pipelinechannel--cd_trigger_id:
+          parameterType: STRING
+        pipelinechannel--model-evaluator-op-best_model_name:
           parameterType: STRING
         pipelinechannel--model-evaluator-op-best_model_uri:
           parameterType: STRING
@@ -80,6 +81,8 @@ components:
           parameterType: STRING
     outputDefinitions:
       parameters:
+        best_model_name:
+          parameterType: STRING
         best_model_uri:
           parameterType: STRING
         decision:
@@ -196,7 +199,9 @@ deploymentSpec:
           \ *\n\ndef data_ingestion_op(\n    bucket_name: str,\n    blob_name: str,\n\
           \    error_log_bucket: str\n) -> NamedTuple(\"outputs\", [(\"raw_dataset\"\
           , Dataset)]):\n    \"\"\"Factory for the data ingestion container component.\"\
-          \"\"\n    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest',\n\
+          \"\"\n    # FIX: Import ContainerSpec inside the function to ensure it's\
+          \ packaged by the compiler.\n    from kfp.dsl import ContainerSpec\n\n \
+          \   return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest',\n\
           \        command=[\"python3\", \"component.py\"],\n        args=[\n    \
           \        \"--bucket-name\", bucket_name,\n            \"--blob-name\", blob_name,\n\
           \            \"--output-dataset-path\", dsl.OutputPath(\"raw_dataset\"),\n\
@@ -233,8 +238,10 @@ deploymentSpec:
           \ Input[Model],\n    linear_regression_model: Input[Model],\n    logistic_regression_model:\
           \ Input[Model],\n    model_bucket_name: str,\n    prod_model_blob: str,\n\
           ) -> NamedTuple(\"outputs\", [(\"decision\", str), (\"best_model_uri\",\
-          \ str)]):\n    \"\"\"Factory for the model evaluator component.\"\"\"\n\
-          \    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',\n\
+          \ str), (\"best_model_name\", str)]):\n    \"\"\"Factory for the model evaluator\
+          \ component.\"\"\"\n    # FIX: Import ContainerSpec inside the function.\n\
+          \    from kfp.dsl import ContainerSpec\n\n    return ContainerSpec(\n  \
+          \      image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',\n\
           \        command=[\"python3\", \"component.py\"],\n        args=[\n    \
           \        \"--testing_data_path\", dsl.InputPath(testing_data),\n       \
           \     \"--decision_tree_model_path\", dsl.InputPath(decision_tree_model),\n\
@@ -243,6 +250,7 @@ deploymentSpec:
           \            \"--model_bucket_name\", model_bucket_name,\n            \"\
           --prod_model_blob\", prod_model_blob,\n            \"--decision\", dsl.OutputPath(\"\
           decision\"),\n            \"--best_model_uri\", dsl.OutputPath(\"best_model_uri\"\
+          ),\n            \"--best_model_name\", dsl.OutputPath(\"best_model_name\"\
           ),\n        ]\n    )\n\n"
         image: python:3.9
     exec-train-model-op:
@@ -273,11 +281,12 @@ deploymentSpec:
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef train_model_op(\n    image: str,\n    training_data: Input[Dataset]\n\
           ) -> NamedTuple(\"outputs\", [(\"model\", Model)]):\n    \"\"\"Factory for\
-          \ a generic model training component.\"\"\"\n    return ContainerSpec(\n\
-          \        image=image,\n        command=[\"python3\", \"component.py\"],\n\
-          \        args=[\n            \"--training_data_path\", dsl.InputPath(training_data),\n\
-          \            \"--model_artifact_path\", dsl.OutputPath(\"model\"),\n   \
-          \     ]\n    )\n\n"
+          \ a generic model training component.\"\"\"\n    # FIX: Import ContainerSpec\
+          \ inside the function.\n    from kfp.dsl import ContainerSpec\n\n    return\
+          \ ContainerSpec(\n        image=image,\n        command=[\"python3\", \"\
+          component.py\"],\n        args=[\n            \"--training_data_path\",\
+          \ dsl.InputPath(training_data),\n            \"--model_artifact_path\",\
+          \ dsl.OutputPath(\"model\"),\n        ]\n    )\n\n"
         image: python:3.9
     exec-train-model-op-2:
       container:
@@ -307,11 +316,12 @@ deploymentSpec:
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef train_model_op(\n    image: str,\n    training_data: Input[Dataset]\n\
           ) -> NamedTuple(\"outputs\", [(\"model\", Model)]):\n    \"\"\"Factory for\
-          \ a generic model training component.\"\"\"\n    return ContainerSpec(\n\
-          \        image=image,\n        command=[\"python3\", \"component.py\"],\n\
-          \        args=[\n            \"--training_data_path\", dsl.InputPath(training_data),\n\
-          \            \"--model_artifact_path\", dsl.OutputPath(\"model\"),\n   \
-          \     ]\n    )\n\n"
+          \ a generic model training component.\"\"\"\n    # FIX: Import ContainerSpec\
+          \ inside the function.\n    from kfp.dsl import ContainerSpec\n\n    return\
+          \ ContainerSpec(\n        image=image,\n        command=[\"python3\", \"\
+          component.py\"],\n        args=[\n            \"--training_data_path\",\
+          \ dsl.InputPath(training_data),\n            \"--model_artifact_path\",\
+          \ dsl.OutputPath(\"model\"),\n        ]\n    )\n\n"
         image: python:3.9
     exec-train-model-op-3:
       container:
@@ -341,11 +351,12 @@ deploymentSpec:
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef train_model_op(\n    image: str,\n    training_data: Input[Dataset]\n\
           ) -> NamedTuple(\"outputs\", [(\"model\", Model)]):\n    \"\"\"Factory for\
-          \ a generic model training component.\"\"\"\n    return ContainerSpec(\n\
-          \        image=image,\n        command=[\"python3\", \"component.py\"],\n\
-          \        args=[\n            \"--training_data_path\", dsl.InputPath(training_data),\n\
-          \            \"--model_artifact_path\", dsl.OutputPath(\"model\"),\n   \
-          \     ]\n    )\n\n"
+          \ a generic model training component.\"\"\"\n    # FIX: Import ContainerSpec\
+          \ inside the function.\n    from kfp.dsl import ContainerSpec\n\n    return\
+          \ ContainerSpec(\n        image=image,\n        command=[\"python3\", \"\
+          component.py\"],\n        args=[\n            \"--training_data_path\",\
+          \ dsl.InputPath(training_data),\n            \"--model_artifact_path\",\
+          \ dsl.OutputPath(\"model\"),\n        ]\n    )\n\n"
         image: python:3.9
     exec-train-test-splitter-op:
       container:
@@ -376,7 +387,8 @@ deploymentSpec:
           \ *\n\ndef train_test_splitter_op(\n    input_dataset: Input[Dataset]\n\
           ) -> NamedTuple(\"outputs\", [(\"training_data\", Dataset), (\"testing_data\"\
           , Dataset)]):\n    \"\"\"Factory for the train-test splitter component.\"\
-          \"\"\n    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest',\n\
+          \"\"\n    # FIX: Import ContainerSpec inside the function.\n    from kfp.dsl\
+          \ import ContainerSpec\n\n    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest',\n\
           \        command=[\"python3\", \"component.py\"],\n        args=[\n    \
           \        \"--input-dataset-path\", dsl.InputPath(input_dataset),\n     \
           \       \"--training-data-path\", dsl.OutputPath(\"training_data\"),\n \
@@ -411,8 +423,9 @@ deploymentSpec:
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef trigger_cd_pipeline_op(\n    project_id: str,\n    trigger_id:\
           \ str,\n    new_model_uri: str,\n    best_model_name: str,\n):\n    \"\"\
-          \"Factory for the CD trigger component.\"\"\"\n    return ContainerSpec(\n\
-          \        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest',\n\
+          \"Factory for the CD trigger component.\"\"\"\n    # FIX: Import ContainerSpec\
+          \ inside the function.\n    from kfp.dsl import ContainerSpec\n\n    return\
+          \ ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest',\n\
           \        command=[\"python3\", \"component.py\"],\n        args=[\n    \
           \        \"--project-id\", project_id,\n            \"--trigger-id\", trigger_id,\n\
           \            \"--new-model-uri\", new_model_uri,\n            \"--best-model-name\"\
@@ -432,6 +445,10 @@ root:
           parameters:
             pipelinechannel--cd_trigger_id:
               componentInputParameter: cd_trigger_id
+            pipelinechannel--model-evaluator-op-best_model_name:
+              taskOutputParameter:
+                outputParameterKey: best_model_name
+                producerTask: model-evaluator-op
             pipelinechannel--model-evaluator-op-best_model_uri:
               taskOutputParameter:
                 outputParameterKey: best_model_uri
