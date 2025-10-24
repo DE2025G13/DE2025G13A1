@@ -9,22 +9,20 @@ def split_data(input_data_path: str, training_data_path: str, testing_data_path:
     testing sets to separate artifact locations.
     """
     df = pd.read_csv(input_data_path)
-    df.drop(columns="Id", inplace=True)
+    if "Id" in df.columns:
+        df.drop(columns="Id", inplace=True)
 
     X = df.drop(columns=["quality"])
     y = df["quality"]
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    # Create the output directories KFP provides
     os.makedirs(training_data_path, exist_ok=True)
     os.makedirs(testing_data_path, exist_ok=True)
     
-    # Save training data
     X_train.to_csv(f"{training_data_path}/x_train.csv", index=False)
     y_train.to_csv(f"{training_data_path}/y_train.csv", index=False)
     
-    # Save testing data
     X_test.to_csv(f"{testing_data_path}/x_test.csv", index=False)
     y_test.to_csv(f"{testing_data_path}/y_test.csv", index=False)
     

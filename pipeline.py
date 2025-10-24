@@ -1,121 +1,100 @@
 import kfp
 from kfp import dsl
 from kfp import compiler
+from kfp.dsl import Input, Output, Artifact, Model, Dataset, OutputPath
 
 @dsl.container_component
-def preprocess_data(
-    data_bucket_name: str,
-    raw_data_path: str,
-    processed_prefix: str,
-):
-    """Writes processed data to a specified GCS prefix."""
+def data_ingestion(bucket_name: str, blob_name: str, raw_data: Output[Artifact]):
     return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-preprocessor:latest',
-        command=[ "python3", "component.py", "--data-bucket-name", data_bucket_name, "--raw-data-path", raw_data_path, "--processed-prefix", processed_prefix ]
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest',
+        command=["python3", "component.py", "--bucket-name", bucket_name, "--blob-name", blob_name, "--output-path", raw_data.path]
     )
 
 @dsl.container_component
-def train_model(
-    image_url: str,
-    processed_data_uri: str,
-    output_model_uri: str,
-):
-    """Reads data from a URI and writes a model to a URI."""
+def train_test_splitter(input_data: Input[Artifact], training_data: Output[Dataset], testing_data: Output[Dataset]):
     return dsl.ContainerSpec(
-        image=image_url,
-        command=[ "python3", "component.py", "--processed-data-uri", processed_data_uri, "--output-model-uri", output_model_uri ]
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest',
+        command=[ "python3", "component.py", "--input-data-path", input_data.path, "--training-data-path", training_data.path, "--testing-data-path", testing_data.path, ]
     )
 
 @dsl.container_component
-def evaluate_models(
-    processed_data_uri: str,
-    decision_tree_model_uri: str,
-    linear_regression_model_uri: str,
-    logistic_regression_model_uri: str,
-    model_bucket_name: str,
-    prod_model_blob: str,
-    decision: dsl.OutputPath(str),
-):
-    """Evaluates models and prints the decision."""
+def train_decision_tree(training_data: Input[Dataset], model: Output[Model]):
+    return dsl.ContainerSpec(
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest',
+        command=["python3", "component.py", "--training_data_path", training_data.path, "--model_artifact_path", model.path]
+    )
+
+@dsl.container_component
+def train_linear_regression(training_data: Input[Dataset], model: Output[Model]):
+    return dsl.ContainerSpec(
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-lr:latest',
+        command=["python3", "component.py", "--training_data_path", training_data.path, "--model_artifact_path", model.path]
+    )
+
+@dsl.container_component
+def train_logistic_regression(training_data: Input[Dataset], model: Output[Model]):
+    return dsl.ContainerSpec(
+        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-logr:latest',
+        command=["python3", "component.py", "--training_data_path", training_data.path, "--model_artifact_path", model.path]
+    )
+
+@dsl.container_component
+def model_evaluator(testing_data: Input[Dataset], decision_tree_model: Input[Model], linear_regression_model: Input[Model], logistic_regression_model: Input[Model], model_bucket_name: str, prod_model_blob: str, decision: OutputPath(str)):
     return dsl.ContainerSpec(
         image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',
         command=[
             "bash", "-c",
             f"python component.py "
-            f"--processed-data-uri {processed_data_uri} "
-            f"--decision-tree-model-uri {decision_tree_model_uri} "
-            f"--linear-regression-model-uri {linear_regression_model_uri} "
-            f"--logistic-regression-model-uri {logistic_regression_model_uri} "
-            f"--model-bucket-name {model_bucket_name} "
-            f"--prod-model-blob {prod_model_blob} "
+            f"--testing_data_path {testing_data.path} "
+            f"--decision_tree_model_path {decision_tree_model.path} "
+            f"--linear_regression_model_path {linear_regression_model.path} "
+            f"--logistic_regression_model_path {logistic_regression_model.path} "
+            f"--model_bucket_name {model_bucket_name} "
+            f"--prod_model_blob {prod_model_blob} "
             f"> {decision}"
         ]
     )
 
 @dsl.container_component
-def trigger_cd_pipeline(
-    project_id: str,
-    trigger_id: str,
-    new_model_uri: str,
-):
-    """Triggers the Cloud Build deployment pipeline."""
+def trigger_cd_pipeline(project_id: str, trigger_id: str, new_model_uri: str):
     return dsl.ContainerSpec(
         image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest',
-        command=[ "python3", "component.py", "--project-id", project_id, "--trigger-id", trigger_id, "--new-model-uri", new_model_uri, "--best-model-name", "best_model" ]
+        command=["python3", "component.py", "--project-id", project_id, "--trigger-id", trigger_id, "--new-model-uri", new_model_uri, "--best-model-name", "best_model"]
     )
 
-@dsl.pipeline(
-    name='wine-quality-training-pipeline-final',
-    description='Trains, evaluates, and triggers deployment for a wine quality model.'
-)
+@dsl.pipeline(name='wine-quality-elaborate-pipeline')
 def wine_quality_pipeline(
     project_id: str = "data-engineering-vm",
     data_bucket: str = "yannick-wine-data",
     model_bucket: str = "yannick-wine-models",
     cd_trigger_id: str = "deploy-wine-app-trigger"
 ):
-    processed_prefix = f"processed_data/run-{{{{$.pipeline_job_name}}}}"
-    processed_data_uri = f"gs://{data_bucket}/{processed_prefix}"
+    ingestion_task = data_ingestion(bucket_name=data_bucket, blob_name="raw/WineQT.csv")
+    split_task = train_test_splitter(input_data=ingestion_task.outputs["raw_data"])
+    dt_task = train_decision_tree(training_data=split_task.outputs["training_data"])
+    lr_task = train_linear_regression(training_data=split_task.outputs["training_data"])
+    logr_task = train_logistic_regression(training_data=split_task.outputs["training_data"])
 
-    dt_model_uri = f"gs://{model_bucket}/candidate_models/{{{{$.pipeline_job_name}}}}/decision-tree/model.joblib"
-    lr_model_uri = f"gs://{model_bucket}/candidate_models/{{{{$.pipeline_job_name}}}}/linear-regression/model.joblib"
-    logr_model_uri = f"gs://{model_bucket}/candidate_models/{{{{$.pipeline_job_name}}}}/logistic-regression/model.joblib"
-
-    # Step 1: Preprocess the data.
-    preprocess_task = preprocess_data(
-        data_bucket_name=data_bucket,
-        raw_data_path="raw/WineQT.csv",
-        processed_prefix=processed_prefix
-    )
-
-    # Step 2: Train models. They read and write from the exact URIs we defined.
-    train_dt_task = train_model(image_url='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest', processed_data_uri=processed_data_uri, output_model_uri=dt_model_uri).after(preprocess_task)
-    train_lr_task = train_model(image_url='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-lr:latest', processed_data_uri=processed_data_uri, output_model_uri=lr_model_uri).after(preprocess_task)
-    train_logr_task = train_model(image_url='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-logr:latest', processed_data_uri=processed_data_uri, output_model_uri=logr_model_uri).after(preprocess_task)
-    
-    # Step 3: Evaluate. Pass all paths as simple strings.
-    evaluation_task = evaluate_models(
-        processed_data_uri=processed_data_uri,
-        decision_tree_model_uri=dt_model_uri,
-        linear_regression_model_uri=lr_model_uri,
-        logistic_regression_model_uri=logr_model_uri,
+    eval_task = model_evaluator(
+        testing_data=split_task.outputs["testing_data"],
+        decision_tree_model=dt_task.outputs["model"],
+        linear_regression_model=lr_task.outputs["model"],
+        logistic_regression_model=logr_task.outputs["model"],
         model_bucket_name=model_bucket,
         prod_model_blob="production_model/model.joblib"
-    ).after(train_dt_task, train_lr_task, train_logr_task)
-    
-    evaluation_task.set_caching_options(enable_caching=False)
-    
-    # Step 4: Conditionally trigger deployment.
-    with dsl.Condition(evaluation_task.outputs["decision"] != "keep_old", name="if-new-model-is-better"):
-        trigger_cd_pipeline(
-            project_id=project_id,
-            trigger_id=cd_trigger_id,
-            new_model_uri=evaluation_task.outputs["decision"]
-        )
+    )
+    eval_task.set_caching_options(enable_caching=False)
+
+    # Use dsl.If for modern, correct conditional logic
+    with dsl.If(eval_task.outputs["decision"] != "keep_old", name="if-new-model-is-better"):
+        with dsl.If(eval_task.outputs["decision"] == "decision_tree", name="deploy-decision-tree"):
+            # Pass the .uri of the model artifact directly. This will work now.
+            trigger_cd_pipeline(project_id=project_id, trigger_id=cd_trigger_id, new_model_uri=dt_task.outputs["model"].uri)
+        with dsl.If(eval_task.outputs["decision"] == "linear_regression", name="deploy-linear-regression"):
+            trigger_cd_pipeline(project_id=project_id, trigger_id=cd_trigger_id, new_model_uri=lr_task.outputs["model"].uri)
+        with dsl.If(eval_task.outputs["decision"] == "logistic_regression", name="deploy-logistic-regression"):
+            trigger_cd_pipeline(project_id=project_id, trigger_id=cd_trigger_id, new_model_uri=logr_task.outputs["model"].uri)
 
 if __name__ == '__main__':
-    compiler.Compiler().compile(
-        pipeline_func=wine_quality_pipeline,
-        package_path='wine_quality_pipeline.yaml'
-    )
+    compiler.Compiler().compile(pipeline_func=wine_quality_pipeline, package_path='wine_quality_pipeline.yaml')
     print("\nPipeline compiled successfully to wine_quality_pipeline.yaml\n")

@@ -1,8 +1,10 @@
 import argparse
 from google.cloud import storage
+import os
 
 def ingest_data(bucket_name: str, blob_name: str, output_path: str):
     """Downloads a file from GCS to a local path for use as a KFP artifact."""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_name)

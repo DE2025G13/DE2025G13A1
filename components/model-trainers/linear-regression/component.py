@@ -5,13 +5,10 @@ import joblib
 import os
 
 def train_model(training_data_path: str, model_artifact_path: str):
-    """Reads training data from a path and saves a trained model to another path."""
     X_train = pd.read_csv(f"{training_data_path}/x_train.csv")
     y_train = pd.read_csv(f"{training_data_path}/y_train.csv")
-
     model = LinearRegression()
     model.fit(X_train, y_train.values.ravel())
-
     os.makedirs(os.path.dirname(model_artifact_path), exist_ok=True)
     joblib.dump(model, model_artifact_path)
     print(f"Linear Regression model saved to {model_artifact_path}")
