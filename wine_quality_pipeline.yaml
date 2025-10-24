@@ -169,7 +169,8 @@ deploymentSpec:
           \ Input[Model],\n    linear_regression_model: Input[Model],\n    logistic_regression_model:\
           \ Input[Model],\n    model_bucket_name: str,\n    prod_model_blob: str,\n\
           ) -> str:\n    \"\"\"Evaluates models and returns 'deploy' or 'keep_old'.\"\
-          \"\"\n    return dsl.ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',\n\
+          \"\"\n    # This import is also INSIDE the function.\n    from kfp.dsl import\
+          \ ContainerSpec\n\n    return ContainerSpec(\n        image='europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest',\n\
           \        command=[\n            \"python3\", \"component.py\",\n       \
           \     \"--processed-data-path\", processed_data.path,\n            \"--decision-tree-model-path\"\
           , decision_tree_model.path,\n            \"--linear-regression-model-path\"\
@@ -206,7 +207,8 @@ deploymentSpec:
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef preprocess_data(\n    data_bucket_name: str,\n    raw_data_path:\
-          \ str,\n    processed_data: Output[Dataset],\n):\n    pass\n\n"
+          \ str,\n    processed_data: Output[Dataset],\n):\n    \"\"\"Initial component\
+          \ to load, split, and process the raw data.\"\"\"\n    pass\n\n"
         image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-preprocessor:latest
     exec-train-model:
       container:
@@ -235,11 +237,14 @@ deploymentSpec:
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef train_model(\n    image_url: str,\n    processed_data: Input[Dataset],\n\
-          \    model: Output[Model],\n):\n    return dsl.ContainerSpec(\n        image=image_url,\n\
-          \        command=[\n            \"python3\",\n            \"component.py\"\
-          ,\n            \"--processed-data-path\",\n            processed_data.path,\n\
-          \            \"--model-artifact-path\",\n            model.path,\n     \
-          \   ]\n    )\n\n"
+          \    model: Output[Model],\n):\n    \"\"\"A generic training component that\
+          \ takes a Docker image URL.\"\"\"\n    # This import is now INSIDE the function,\
+          \ making it self-contained.\n    from kfp.dsl import ContainerSpec\n\n \
+          \   return ContainerSpec(\n        image=image_url,\n        command=[\n\
+          \            \"python3\",\n            \"component.py\",\n            \"\
+          --processed-data-path\",\n            processed_data.path,\n           \
+          \ \"--model-artifact-path\",\n            model.path,\n        ]\n    )\n\
+          \n"
         image: python:3.9
     exec-train-model-2:
       container:
@@ -268,11 +273,14 @@ deploymentSpec:
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef train_model(\n    image_url: str,\n    processed_data: Input[Dataset],\n\
-          \    model: Output[Model],\n):\n    return dsl.ContainerSpec(\n        image=image_url,\n\
-          \        command=[\n            \"python3\",\n            \"component.py\"\
-          ,\n            \"--processed-data-path\",\n            processed_data.path,\n\
-          \            \"--model-artifact-path\",\n            model.path,\n     \
-          \   ]\n    )\n\n"
+          \    model: Output[Model],\n):\n    \"\"\"A generic training component that\
+          \ takes a Docker image URL.\"\"\"\n    # This import is now INSIDE the function,\
+          \ making it self-contained.\n    from kfp.dsl import ContainerSpec\n\n \
+          \   return ContainerSpec(\n        image=image_url,\n        command=[\n\
+          \            \"python3\",\n            \"component.py\",\n            \"\
+          --processed-data-path\",\n            processed_data.path,\n           \
+          \ \"--model-artifact-path\",\n            model.path,\n        ]\n    )\n\
+          \n"
         image: python:3.9
     exec-train-model-3:
       container:
@@ -301,11 +309,14 @@ deploymentSpec:
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef train_model(\n    image_url: str,\n    processed_data: Input[Dataset],\n\
-          \    model: Output[Model],\n):\n    return dsl.ContainerSpec(\n        image=image_url,\n\
-          \        command=[\n            \"python3\",\n            \"component.py\"\
-          ,\n            \"--processed-data-path\",\n            processed_data.path,\n\
-          \            \"--model-artifact-path\",\n            model.path,\n     \
-          \   ]\n    )\n\n"
+          \    model: Output[Model],\n):\n    \"\"\"A generic training component that\
+          \ takes a Docker image URL.\"\"\"\n    # This import is now INSIDE the function,\
+          \ making it self-contained.\n    from kfp.dsl import ContainerSpec\n\n \
+          \   return ContainerSpec(\n        image=image_url,\n        command=[\n\
+          \            \"python3\",\n            \"component.py\",\n            \"\
+          --processed-data-path\",\n            processed_data.path,\n           \
+          \ \"--model-artifact-path\",\n            model.path,\n        ]\n    )\n\
+          \n"
         image: python:3.9
     exec-trigger-cd-pipeline:
       container:
