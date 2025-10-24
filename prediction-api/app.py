@@ -1,38 +1,78 @@
-from flask import Flask, request, render_template
-import requests
+from flask import Flask, request, jsonify
+import joblib
+import pandas as pd
 import os
+from google.cloud import storage
 
 app = Flask(__name__)
-PREDICTOR_API_URL = os.environ.get("PREDICTOR_API_URL")
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+MODEL_BUCKET_NAME = os.environ.get("MODEL_BUCKET", "yannick-wine-models")
+MODEL_BLOB_NAME = "production_model/model.joblib"
+LOCAL_MODEL_PATH = "/tmp/model.joblib"
+
+model = None
+
+def download_model():
+    """Downloads the model file from GCS."""
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(MODEL_BUCKET_NAME)
+        blob = bucket.blob(MODEL_BLOB_NAME)
+        blob.download_to_filename(LOCAL_MODEL_PATH)
+        print(f"Model downloaded from gs://{MODEL_BUCKET_NAME}/{MODEL_BLOB_NAME}")
+        return True
+    except Exception as e:
+        print(f"Error downloading model: {e}")
+        return False
+
+def load_model():
+    """Loads the model from the local file into memory."""
+    global model
+    if os.path.exists(LOCAL_MODEL_PATH):
+        try:
+            model = joblib.load(LOCAL_MODEL_PATH)
+            print("Model loaded successfully.")
+        except Exception as e:
+            print(f"Error loading model from disk: {e}")
+            model = None
+    else:
+        print("Model file not found locally.")
+        model = None
+
+if download_model():
+    load_model()
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    if not PREDICTOR_API_URL:
-        return render_template('result.html', error="Predictor API URL not configured on the server.")
+    if model is None:
+        return jsonify({'error': 'Model is not available. Check server logs.'}), 503
 
     try:
-        form_data = request.form.to_dict()
+        data = request.get_json()
+        features = [
+            "fixed acidity", "volatile acidity", "citric acid", "residual sugar",
+            "chlorides", "free sulfur dioxide", "total sulfur dioxide", "density",
+            "pH", "sulphates", "alcohol"
+        ]
         
-        # Convert all form values from string to float
-        for key, value in form_data.items():
-            form_data[key] = float(value)
+        input_df = pd.DataFrame([data], columns=features)
+        
+        prediction_result = model.predict(input_df)
+        
+        final_prediction = int(round(prediction_result[0]))
 
-        response = requests.post(f"{PREDICTOR_API_URL}/predict", json=form_data, timeout=20)
-        response.raise_for_status() 
-        
-        data = response.json()
-        if 'error' in data:
-             return render_template('result.html', error=data['error'])
-        
-        return render_template('result.html', prediction=data.get('prediction'))
-    except requests.exceptions.RequestException as e:
-        return render_template('result.html', error=f"Could not connect to the prediction API: {e}")
+        return jsonify({'prediction': final_prediction})
+
     except Exception as e:
-        return render_template('result.html', error=f"An unexpected error occurred: {e}")
+        return jsonify({'error': f"An error occurred during prediction: {e}"}), 400
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint."""
+    if model:
+        return jsonify({'status': 'ok', 'model': 'loaded'}), 200
+    else:
+        return jsonify({'status': 'error', 'model': 'not_loaded'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))

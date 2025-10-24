@@ -1,42 +1,45 @@
-from flask import Flask, request, render_template, redirect, url_for
+from flask import Flask, request, render_template
 import requests
 import os
 
 app = Flask(__name__)
+
 PREDICTOR_API_URL = os.environ.get("PREDICTOR_API_URL")
 
 @app.route('/')
 def index():
+    """Renders the main page with the input form."""
     return render_template('index.html')
 
-@app.route('/upload', methods=['POST'])
-def upload():
-    if 'file' not in request.files:
-        return "No file part", 400
-    file = request.files['file']
-    if file.filename == '':
-        return "No selected file", 400
-    
-    if file and PREDICTOR_API_URL:
-        files = {'file': (file.filename, file.stream, file.mimetype)}
-        try:
-            response = requests.post(f"{PREDICTOR_API_URL}/predict", files=files, timeout=20)
-            response.raise_for_status() 
-            
-            data = response.json()
-            if 'error' in data:
-                 return render_template('result.html', error=data['error'])
-            
-            return render_template('result.html', 
-                                   prediction=data.get('prediction', 'N/A'), 
-                                   confidence=f"{data.get('confidence', 0):.2f}",
-                                   image_with_box=data.get('image_with_box'))
-        except requests.exceptions.RequestException as e:
-            return f"Could not connect to or get a valid response from the prediction API: {e}", 503
-        except Exception as e:
-            return f"An unexpected error occurred: {e}", 500
-    
-    return redirect(url_for('index'))
+@app.route('/predict', methods=['POST'])
+def predict():
+    """Handles form submission, calls the prediction API, and renders the result."""
+    if not PREDICTOR_API_URL:
+        return render_template('result.html', error="Predictor API URL not configured on the server.")
+
+    try:
+        form_data = request.form.to_dict()
+        
+        json_payload = {key: float(value) for key, value in form_data.items()}
+
+        api_endpoint = f"{PREDICTOR_API_URL}/predict"
+        
+        response = requests.post(api_endpoint, json=json_payload, timeout=10)
+        
+        response.raise_for_status() 
+        
+        data = response.json()
+        if 'error' in data:
+             return render_template('result.html', error=data['error'])
+        
+        return render_template('result.html', prediction=data.get('prediction'))
+
+    except requests.exceptions.RequestException as e:
+        return render_template('result.html', error=f"Could not connect to the prediction API: {e}")
+    except ValueError:
+        return render_template('result.html', error="Invalid input. Please ensure all fields are numbers.")
+    except Exception as e:
+        return render_template('result.html', error=f"An unexpected error occurred: {e}")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
