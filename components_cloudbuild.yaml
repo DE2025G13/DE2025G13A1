@@ -8,7 +8,6 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest', '.']
   dir: 'components/train-test-splitter'
-
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest', '.']
   dir: 'components/model-trainers/decision-tree'
@@ -18,6 +17,12 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-logr:latest', '.']
   dir: 'components/model-trainers/logistic-regression'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest', '.']
+  dir: 'components/model-evaluator'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest', '.']
+  dir: 'components/trigger-cd'
 
 images:
 - 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest'
@@ -25,3 +30,5 @@ images:
 - 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest'
 - 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-lr:latest'
 - 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-logr:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest'

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Prediction Result</title>
+    <style> body { font-family: sans-serif; text-align: center; margin-top: 50px; } .error { color: red; } </style>
+</head>
+<body>
+    <h1>Predicted Wine Quality</h1>
+    {% if error %}
+        <p class="error">An error occurred: {{ error }}</p>
+    {% else %}
+        <h2>{{ prediction }}</h2>
+    {% endif %}
+    <a href="/">Try another prediction</a>
+</body>
+</html>
