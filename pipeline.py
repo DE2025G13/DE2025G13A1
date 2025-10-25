@@ -1,7 +1,6 @@
 from kfp import dsl
-from kfp.dsl import Dataset, Output
+from kfp.dsl import Dataset, Input, Output
 
-# Replace 'data-engineering-vm' with your GCP Project ID
 IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo"
 
 @dsl.container_component
@@ -10,15 +9,10 @@ def data_ingestion_op(
     blob_name: str,
     raw_dataset: Output[Dataset],
 ):
-    """
-    This is the factory component. 
-    It defines the interface for the containerized component.
-    """
+    """Factory for the data ingestion container component."""
     return dsl.ContainerSpec(
         image=f'{IMAGE_REGISTRY_PATH}/data-ingestion:latest',
-        command=[
-            "python3", "component.py"
-        ],
+        command=["python3", "component.py"],
         args=[
             "--bucket-name", bucket_name,
             "--blob-name", blob_name,
@@ -26,22 +20,43 @@ def data_ingestion_op(
         ]
     )
 
-@dsl.pipeline(name='minimal-ingestion-pipeline')
-def minimal_pipeline(
+@dsl.container_component
+def train_test_splitter_op(
+    input_dataset: Input[Dataset],
+    training_data: Output[Dataset],
+    testing_data: Output[Dataset],
+):
+    """Factory for the train-test splitter component."""
+    return dsl.ContainerSpec(
+        image=f'{IMAGE_REGISTRY_PATH}/train-test-splitter:latest',
+        command=["python3", "component.py"],
+        args=[
+            "--input-dataset-path", input_dataset.path,
+            "--training-data-path", training_data.path,
+            "--testing-data-path", testing_data.path,
+        ]
+    )
+
+@dsl.pipeline(name='wine-quality-pipeline')
+def wine_quality_pipeline(
     data_bucket: str = "yannick-wine-data"
 ):
-    """A minimal one-step pipeline to test data ingestion."""
+    """A two-step pipeline to ingest and split data."""
     
-    # Run the data ingestion component
     ingestion_task = data_ingestion_op(
         bucket_name=data_bucket,
         blob_name="raw/WineQT.csv"
     )
 
+    split_task = train_test_splitter_op(
+        input_dataset=ingestion_task.outputs["raw_dataset"]
+    )
+    # ----------------------------------------
+
 if __name__ == '__main__':
     from kfp import compiler
     compiler.Compiler().compile(
-        pipeline_func=minimal_pipeline,
-        package_path='minimal_pipeline.yaml'
+        pipeline_func=wine_quality_pipeline,
+        package_path='wine_quality_pipeline.yaml'
     )
-    print("Minimal pipeline compiled successfully to minimal_pipeline.yaml")
+    print("Pipeline compiled successfully to wine_quality_pipeline.yaml")

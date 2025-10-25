@@ -3,12 +3,13 @@ options:
 
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: [
-    'build', 
-    '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest', 
-    '.'
-  ]
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest', '.']
   dir: 'components/data-ingestion'
+  
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest', '.']
+  dir: 'components/train-test-splitter'
 
 images:
 - 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest'
