@@ -1,9 +1,40 @@
 # PIPELINE DEFINITION
-# Name: wine-quality-pipeline
-# Description: A pipeline that ingests, splits, and trains three models in parallel.
+# Name: wine-quality-end-to-end-pipeline
+# Description: A full MLOps pipeline for training, evaluating, and deploying a wine quality model.
 # Inputs:
+#    cd_trigger_id: str [Default: 'deploy-wine-app-trigger']
 #    data_bucket: str [Default: 'yannick-wine-data']
+#    model_bucket: str [Default: 'yannick-wine-models']
+#    project_id: str [Default: 'data-engineering-vm']
 components:
+  comp-condition-1:
+    dag:
+      tasks:
+        trigger-cd-pipeline-op:
+          cachingOptions:
+            enableCache: true
+          componentRef:
+            name: comp-trigger-cd-pipeline-op
+          inputs:
+            parameters:
+              new_model_uri:
+                componentInputParameter: pipelinechannel--model-evaluator-op-best_model_uri
+              project_id:
+                componentInputParameter: pipelinechannel--project_id
+              trigger_id:
+                componentInputParameter: pipelinechannel--cd_trigger_id
+          taskInfo:
+            name: trigger-cd-pipeline-op
+    inputDefinitions:
+      parameters:
+        pipelinechannel--cd_trigger_id:
+          parameterType: STRING
+        pipelinechannel--model-evaluator-op-best_model_uri:
+          parameterType: STRING
+        pipelinechannel--model-evaluator-op-decision:
+          parameterType: STRING
+        pipelinechannel--project_id:
+          parameterType: STRING
   comp-data-ingestion-op:
     executorLabel: exec-data-ingestion-op
     inputDefinitions:
@@ -18,6 +49,42 @@ components:
           artifactType:
             schemaTitle: system.Dataset
             schemaVersion: 0.0.1
+  comp-model-evaluator-op:
+    executorLabel: exec-model-evaluator-op
+    inputDefinitions:
+      artifacts:
+        decision_tree_model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+        linear_regression_model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+        logistic_regression_model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+        testing_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        model_bucket_name:
+          parameterType: STRING
+        prod_model_blob:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        metrics:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+      parameters:
+        best_model_uri:
+          parameterType: STRING
+        decision:
+          parameterType: STRING
   comp-train-model-op:
     executorLabel: exec-train-model-op
     inputDefinitions:
@@ -87,6 +154,16 @@ components:
           artifactType:
             schemaTitle: system.Dataset
             schemaVersion: 0.0.1
+  comp-trigger-cd-pipeline-op:
+    executorLabel: exec-trigger-cd-pipeline-op
+    inputDefinitions:
+      parameters:
+        new_model_uri:
+          parameterType: STRING
+        project_id:
+          parameterType: STRING
+        trigger_id:
+          parameterType: STRING
 deploymentSpec:
   executors:
     exec-data-ingestion-op:
@@ -102,6 +179,31 @@ deploymentSpec:
         - python3
         - component.py
         image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest
+    exec-model-evaluator-op:
+      container:
+        args:
+        - --testing_data_path
+        - '{{$.inputs.artifacts[''testing_data''].path}}'
+        - --decision_tree_model_path
+        - '{{$.inputs.artifacts[''decision_tree_model''].path}}'
+        - --linear_regression_model_path
+        - '{{$.inputs.artifacts[''linear_regression_model''].path}}'
+        - --logistic_regression_model_path
+        - '{{$.inputs.artifacts[''logistic_regression_model''].path}}'
+        - --model_bucket_name
+        - '{{$.inputs.parameters[''model_bucket_name'']}}'
+        - --prod_model_blob
+        - '{{$.inputs.parameters[''prod_model_blob'']}}'
+        - --decision
+        - '{{$.outputs.artifacts[''decision''].path}}'
+        - --best_model_uri
+        - '{{$.outputs.artifacts[''best_model_uri''].path}}'
+        - --metrics
+        - '{{$.outputs.artifacts[''metrics''].path}}'
+        command:
+        - python3
+        - component.py
+        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest
     exec-train-model-op:
       container:
         args:
@@ -148,12 +250,50 @@ deploymentSpec:
         - python3
         - component.py
         image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest
+    exec-trigger-cd-pipeline-op:
+      container:
+        args:
+        - --project-id
+        - '{{$.inputs.parameters[''project_id'']}}'
+        - --trigger-id
+        - '{{$.inputs.parameters[''trigger_id'']}}'
+        - --new-model-uri
+        - '{{$.inputs.parameters[''new_model_uri'']}}'
+        command:
+        - python3
+        - component.py
+        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest
 pipelineInfo:
-  description: A pipeline that ingests, splits, and trains three models in parallel.
-  name: wine-quality-pipeline
+  description: A full MLOps pipeline for training, evaluating, and deploying a wine
+    quality model.
+  name: wine-quality-end-to-end-pipeline
 root:
   dag:
     tasks:
+      condition-1:
+        componentRef:
+          name: comp-condition-1
+        dependentTasks:
+        - model-evaluator-op
+        inputs:
+          parameters:
+            pipelinechannel--cd_trigger_id:
+              componentInputParameter: cd_trigger_id
+            pipelinechannel--model-evaluator-op-best_model_uri:
+              taskOutputParameter:
+                outputParameterKey: best_model_uri
+                producerTask: model-evaluator-op
+            pipelinechannel--model-evaluator-op-decision:
+              taskOutputParameter:
+                outputParameterKey: decision
+                producerTask: model-evaluator-op
+            pipelinechannel--project_id:
+              componentInputParameter: project_id
+        taskInfo:
+          name: if-new-model-is-better
+        triggerPolicy:
+          condition: inputs.parameter_values['pipelinechannel--model-evaluator-op-decision']
+            == 'deploy_new'
       data-ingestion-op:
         cachingOptions:
           enableCache: true
@@ -168,6 +308,41 @@ root:
               componentInputParameter: data_bucket
         taskInfo:
           name: data-ingestion-op
+      model-evaluator-op:
+        cachingOptions: {}
+        componentRef:
+          name: comp-model-evaluator-op
+        dependentTasks:
+        - train-model-op
+        - train-model-op-2
+        - train-model-op-3
+        - train-test-splitter-op
+        inputs:
+          artifacts:
+            decision_tree_model:
+              taskOutputArtifact:
+                outputArtifactKey: model_artifact
+                producerTask: train-model-op
+            linear_regression_model:
+              taskOutputArtifact:
+                outputArtifactKey: model_artifact
+                producerTask: train-model-op-2
+            logistic_regression_model:
+              taskOutputArtifact:
+                outputArtifactKey: model_artifact
+                producerTask: train-model-op-3
+            testing_data:
+              taskOutputArtifact:
+                outputArtifactKey: testing_data
+                producerTask: train-test-splitter-op
+          parameters:
+            model_bucket_name:
+              componentInputParameter: model_bucket
+            prod_model_blob:
+              runtimeValue:
+                constant: production_model/model.joblib
+        taskInfo:
+          name: model-evaluator-op
       train-model-op:
         cachingOptions:
           enableCache: true
@@ -242,8 +417,20 @@ root:
           name: train-test-splitter-op
   inputDefinitions:
     parameters:
+      cd_trigger_id:
+        defaultValue: deploy-wine-app-trigger
+        isOptional: true
+        parameterType: STRING
       data_bucket:
         defaultValue: yannick-wine-data
+        isOptional: true
+        parameterType: STRING
+      model_bucket:
+        defaultValue: yannick-wine-models
+        isOptional: true
+        parameterType: STRING
+      project_id:
+        defaultValue: data-engineering-vm
         isOptional: true
         parameterType: STRING
 schemaVersion: 2.1.0

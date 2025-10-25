@@ -1,5 +1,5 @@
 from kfp import dsl
-from kfp.dsl import Dataset, Input, Output, Model
+from kfp.dsl import Dataset, Input, Output, Model, Metrics
 
 IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo"
 
@@ -63,6 +63,7 @@ def model_evaluator_op(
     prod_model_blob: str,
     decision: Output[str],
     best_model_uri: Output[str],
+    metrics: Output[Metrics],
 ):
     """Factory for the model evaluator component."""
     return dsl.ContainerSpec(
@@ -77,6 +78,7 @@ def model_evaluator_op(
             "--prod_model_blob", prod_model_blob,
             "--decision", decision.path,
             "--best_model_uri", best_model_uri.path,
+            "--metrics", metrics.path,
         ]
     )
 
