@@ -1,6 +1,6 @@
 # PIPELINE DEFINITION
 # Name: wine-quality-pipeline
-# Description: A two-step pipeline to ingest and split data.
+# Description: A pipeline that ingests, splits, and trains three models in parallel.
 # Inputs:
 #    data_bucket: str [Default: 'yannick-wine-data']
 components:
@@ -17,6 +17,57 @@ components:
         raw_dataset:
           artifactType:
             schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-train-model-op:
+    executorLabel: exec-train-model-op
+    inputDefinitions:
+      artifacts:
+        training_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        image_name:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        model_artifact:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+  comp-train-model-op-2:
+    executorLabel: exec-train-model-op-2
+    inputDefinitions:
+      artifacts:
+        training_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        image_name:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        model_artifact:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+  comp-train-model-op-3:
+    executorLabel: exec-train-model-op-3
+    inputDefinitions:
+      artifacts:
+        training_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        image_name:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        model_artifact:
+          artifactType:
+            schemaTitle: system.Model
             schemaVersion: 0.0.1
   comp-train-test-splitter-op:
     executorLabel: exec-train-test-splitter-op
@@ -51,6 +102,39 @@ deploymentSpec:
         - python3
         - component.py
         image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest
+    exec-train-model-op:
+      container:
+        args:
+        - --training_data_path
+        - '{{$.inputs.artifacts[''training_data''].path}}'
+        - --model_artifact_path
+        - '{{$.outputs.artifacts[''model_artifact''].path}}'
+        command:
+        - python3
+        - component.py
+        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/{{$.inputs.parameters['image_name']}}:latest
+    exec-train-model-op-2:
+      container:
+        args:
+        - --training_data_path
+        - '{{$.inputs.artifacts[''training_data''].path}}'
+        - --model_artifact_path
+        - '{{$.outputs.artifacts[''model_artifact''].path}}'
+        command:
+        - python3
+        - component.py
+        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/{{$.inputs.parameters['image_name']}}:latest
+    exec-train-model-op-3:
+      container:
+        args:
+        - --training_data_path
+        - '{{$.inputs.artifacts[''training_data''].path}}'
+        - --model_artifact_path
+        - '{{$.outputs.artifacts[''model_artifact''].path}}'
+        command:
+        - python3
+        - component.py
+        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/{{$.inputs.parameters['image_name']}}:latest
     exec-train-test-splitter-op:
       container:
         args:
@@ -65,7 +149,7 @@ deploymentSpec:
         - component.py
         image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest
 pipelineInfo:
-  description: A two-step pipeline to ingest and split data.
+  description: A pipeline that ingests, splits, and trains three models in parallel.
   name: wine-quality-pipeline
 root:
   dag:
@@ -84,6 +168,63 @@ root:
               componentInputParameter: data_bucket
         taskInfo:
           name: data-ingestion-op
+      train-model-op:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-model-op
+        dependentTasks:
+        - train-test-splitter-op
+        inputs:
+          artifacts:
+            training_data:
+              taskOutputArtifact:
+                outputArtifactKey: training_data
+                producerTask: train-test-splitter-op
+          parameters:
+            image_name:
+              runtimeValue:
+                constant: model-trainer-dt
+        taskInfo:
+          name: Train-Decision-Tree
+      train-model-op-2:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-model-op-2
+        dependentTasks:
+        - train-test-splitter-op
+        inputs:
+          artifacts:
+            training_data:
+              taskOutputArtifact:
+                outputArtifactKey: training_data
+                producerTask: train-test-splitter-op
+          parameters:
+            image_name:
+              runtimeValue:
+                constant: model-trainer-lr
+        taskInfo:
+          name: Train-Linear-Regression
+      train-model-op-3:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-model-op-3
+        dependentTasks:
+        - train-test-splitter-op
+        inputs:
+          artifacts:
+            training_data:
+              taskOutputArtifact:
+                outputArtifactKey: training_data
+                producerTask: train-test-splitter-op
+          parameters:
+            image_name:
+              runtimeValue:
+                constant: model-trainer-logr
+        taskInfo:
+          name: Train-Logistic-Regression
       train-test-splitter-op:
         cachingOptions:
           enableCache: true

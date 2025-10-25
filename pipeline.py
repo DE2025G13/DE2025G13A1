@@ -1,5 +1,5 @@
 from kfp import dsl
-from kfp.dsl import Dataset, Input, Output
+from kfp.dsl import Dataset, Input, Output, Model
 
 IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo"
 
@@ -37,11 +37,27 @@ def train_test_splitter_op(
         ]
     )
 
+@dsl.container_component
+def train_model_op(
+    image_name: str,
+    training_data: Input[Dataset],
+    model_artifact: Output[Model],
+):
+    """Factory for a generic model training component."""
+    return dsl.ContainerSpec(
+        image=f'{IMAGE_REGISTRY_PATH}/{image_name}:latest',
+        command=["python3", "component.py"],
+        args=[
+            "--training_data_path", training_data.path,
+            "--model_artifact_path", model_artifact.path,
+        ]
+    )
+
 @dsl.pipeline(name='wine-quality-pipeline')
 def wine_quality_pipeline(
     data_bucket: str = "yannick-wine-data"
 ):
-    """A two-step pipeline to ingest and split data."""
+    """A pipeline that ingests, splits, and trains three models in parallel."""
     
     ingestion_task = data_ingestion_op(
         bucket_name=data_bucket,
@@ -51,7 +67,21 @@ def wine_quality_pipeline(
     split_task = train_test_splitter_op(
         input_dataset=ingestion_task.outputs["raw_dataset"]
     )
-    # ----------------------------------------
+
+    dt_task = train_model_op(
+        image_name='model-trainer-dt',
+        training_data=split_task.outputs["training_data"]
+    ).set_display_name('Train-Decision-Tree')
+
+    lr_task = train_model_op(
+        image_name='model-trainer-lr',
+        training_data=split_task.outputs["training_data"]
+    ).set_display_name('Train-Linear-Regression')
+
+    logr_task = train_model_op(
+        image_name='model-trainer-logr',
+        training_data=split_task.outputs["training_data"]
+    ).set_display_name('Train-Logistic-Regression')
 
 if __name__ == '__main__':
     from kfp import compiler
