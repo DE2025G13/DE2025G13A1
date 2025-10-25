@@ -1,0 +1,63 @@
+# PIPELINE DEFINITION
+# Name: minimal-ingestion-pipeline
+# Description: A minimal one-step pipeline to test data ingestion.
+# Inputs:
+#    data_bucket: str [Default: 'yannick-wine-data']
+components:
+  comp-data-ingestion-op:
+    executorLabel: exec-data-ingestion-op
+    inputDefinitions:
+      parameters:
+        blob_name:
+          parameterType: STRING
+        bucket_name:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        raw_dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-data-ingestion-op:
+      container:
+        args:
+        - --bucket-name
+        - '{{$.inputs.parameters[''bucket_name'']}}'
+        - --blob-name
+        - '{{$.inputs.parameters[''blob_name'']}}'
+        - --output-dataset-path
+        - '{{$.outputs.artifacts[''raw_dataset''].path}}'
+        command:
+        - python3
+        - component.py
+        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest
+pipelineInfo:
+  description: A minimal one-step pipeline to test data ingestion.
+  name: minimal-ingestion-pipeline
+root:
+  dag:
+    tasks:
+      data-ingestion-op:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-data-ingestion-op
+        inputs:
+          parameters:
+            blob_name:
+              runtimeValue:
+                constant: raw/WineQT.csv
+            bucket_name:
+              componentInputParameter: data_bucket
+        taskInfo:
+          name: data-ingestion-op
+  inputDefinitions:
+    parameters:
+      data_bucket:
+        defaultValue: yannick-wine-data
+        isOptional: true
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.14.6
