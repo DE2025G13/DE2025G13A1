@@ -3,6 +3,7 @@ import pandas as pd
 import joblib
 import os
 import json
+import traceback # Import the traceback library
 from sklearn.metrics import accuracy_score
 from google.cloud import storage
 from sklearn.linear_model import LinearRegression
@@ -21,8 +22,12 @@ def evaluate_and_decide(
     """
     Evaluates models, logs metrics, compares to production, and outputs the decision.
     """
+    print("--- Starting Model Evaluation ---")
+    
+    print(f"Loading testing data from: {testing_data_path}")
     X_test = pd.read_csv(os.path.join(testing_data_path, "x_test.csv"))
     y_test = pd.read_csv(os.path.join(testing_data_path, "y_test.csv")).values.ravel()
+    print("Testing data loaded successfully.")
 
     models = {
         "decision_tree": decision_tree_model_path,
@@ -34,12 +39,12 @@ def evaluate_and_decide(
     best_candidate_score = -1.0
     best_candidate_uri = ""
     
-    metrics = {
-        "scalar": []
-    }
+    metrics = {"scalar": []}
 
-    print("--- Evaluating Candidate Models ---")
+    # 1. Find the best model among the new candidates
+    print("\n--- Evaluating Candidate Models ---")
     for name, path in models.items():
+        print(f"Loading candidate model '{name}' from path: {path}")
         model = joblib.load(path)
         y_pred = model.predict(X_test)
 
@@ -47,8 +52,7 @@ def evaluate_and_decide(
              y_pred = [round(p) for p in y_pred]
         
         score = accuracy_score(y_test, y_pred)
-        print(f"Candidate '{name}' accuracy: {score:.4f}")
-        
+        print(f"-> Candidate '{name}' accuracy: {score:.4f}")
         metrics["scalar"].append({"metric": f"{name}_accuracy", "value": score})
 
         if score > best_candidate_score:
@@ -56,9 +60,10 @@ def evaluate_and_decide(
             best_candidate_name = name
             best_candidate_uri = path 
 
-    print(f"Best candidate is '{best_candidate_name}' with accuracy: {best_candidate_score:.4f}")
+    print(f"\nBest candidate is '{best_candidate_name}' with accuracy: {best_candidate_score:.4f}")
     metrics["scalar"].append({"metric": "best_candidate_accuracy", "value": best_candidate_score})
 
+    # 2. Compare against the current production model
     print("\n--- Evaluating Production Model ---")
     prod_score = -1.0
     try:
@@ -78,31 +83,38 @@ def evaluate_and_decide(
                  y_prod_pred = [round(p) for p in y_prod_pred]
 
             prod_score = accuracy_score(y_test, y_prod_pred)
-            print(f"Production model accuracy: {prod_score:.4f}")
+            print(f"-> Production model accuracy: {prod_score:.4f}")
             metrics["scalar"].append({"metric": "production_accuracy", "value": prod_score})
         else:
-            print("No production model found. Any new model with a positive score will be promoted.")
+            print("No production model found. Any new model will be promoted.")
     except Exception as e:
         print(f"Could not load or evaluate production model. Assuming it doesn't exist. Error: {e}")
 
+    # 3. Make the final decision
     print("\n--- Making Final Decision ---")
     decision = "keep_old"
     if best_candidate_score > prod_score:
-        print(f"DECISION: New model '{best_candidate_name}' is better ({best_candidate_score:.4f} > {prod_score:.4f}). Promoting.")
+        print(f"DECISION: New model '{best_candidate_name}' is better. Promoting.")
         decision = "deploy_new"
     else:
-        print(f"DECISION: Production model is better or equal ({prod_score:.4f} >= {best_candidate_score:.4f}). Keeping old model.")
+        print(f"DECISION: Production model is better or equal. Keeping old model.")
         best_candidate_uri = "gs://none/none"
 
+    # 4. Write output files
+    print("\n--- Writing Output Artifacts ---")
     with open(metrics_path, 'w') as f:
         json.dump(metrics, f)
     print(f"Metrics saved to {metrics_path}")
 
     with open(decision_path, 'w') as f:
         f.write(decision)
+    print(f"Decision saved to {decision_path}")
     
     with open(best_model_uri_path, 'w') as f:
         f.write(best_candidate_uri)
+    print(f"Best model URI saved to {best_model_uri_path}")
+    
+    print("\n--- Model Evaluation Finished Successfully ---")
 
 
 if __name__ == '__main__':
@@ -118,14 +130,27 @@ if __name__ == '__main__':
     parser.add_argument('--metrics', type=str, required=True)
     args = parser.parse_args()
 
-    evaluate_and_decide(
-        args.testing_data_path,
-        args.decision_tree_model_path,
-        args.linear_regression_model_path,
-        args.logistic_regression_model_path,
-        args.model_bucket_name,
-        args.prod_model_blob,
-        args.decision,
-        args.best_model_uri,
-        args.metrics,
-    )
+    # --- THIS IS THE FIX ---
+    # Wrap the main function call in a try...except block.
+    try:
+        evaluate_and_decide(
+            args.testing_data_path,
+            args.decision_tree_model_path,
+            args.linear_regression_model_path,
+            args.logistic_regression_model_path,
+            args.model_bucket_name,
+            args.prod_model_blob,
+            args.decision,
+            args.best_model_uri,
+            args.metrics,
+        )
+    except Exception as e:
+        # This will catch ANY exception that occurs.
+        print("--- ERROR in Model Evaluator ---")
+        # The traceback.format_exc() function gets the full exception stack trace as a string.
+        error_message = traceback.format_exc()
+        print(error_message)
+        print("---------------------------------")
+        # It's crucial to re-raise the exception to ensure the pipeline step
+        # is still marked as "Failed".
+        raise e
