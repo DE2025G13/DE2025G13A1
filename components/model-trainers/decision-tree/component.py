@@ -11,6 +11,8 @@ def train_model(training_data_path: str, model_artifact_path: str):
     model = DecisionTreeClassifier(max_depth=10, random_state=42)
     model.fit(X_train, y_train.values.ravel())
     
+    os.makedirs(os.path.dirname(model_artifact_path), exist_ok=True)
+    
     # KFP will treat any file saved in model_artifact_path as the model artifact
     joblib.dump(model, model_artifact_path)
     print(f"Decision Tree model saved to {model_artifact_path}")
