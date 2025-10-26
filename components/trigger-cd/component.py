@@ -8,6 +8,13 @@ def trigger_cloud_build(project_id: str, trigger_id: str, new_model_uri: str):
     
     print(f"Attempting to trigger Cloud Build: project='{project_id}', trigger='{trigger_id}'")
     
+    print(f"Received internal KFP path: {new_model_uri}")
+    if new_model_uri.startswith('/gcs/'):
+        gcs_uri = 'gs://' + new_model_uri[5:]
+    else:
+        gcs_uri = new_model_uri # Fallback
+    print(f"Converted to standard GCS URI: {gcs_uri}")
+    
     creds, _ = google.auth.default()
     auth_req = google.auth.transport.requests.Request()
     creds.refresh(auth_req)
