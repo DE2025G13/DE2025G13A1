@@ -14,20 +14,40 @@ model = None
 
 def download_model():
     """Downloads the model file from GCS to a local path."""
+    print("--- Starting model download attempt ---")
+    
+    # Re-check the environment variable inside the function to be certain
+    MODEL_BUCKET_NAME = os.environ.get("MODEL_BUCKET")
+    
     if not MODEL_BUCKET_NAME:
-        print("MODEL_BUCKET environment variable not set.")
+        print("CRITICAL: MODEL_BUCKET environment variable not found.")
         return False
+    
+    print(f"Target Bucket: {MODEL_BUCKET_NAME}")
+    print(f"Target Blob: {MODEL_BLOB_NAME}")
+
     try:
+        print("Step 1: Initializing storage.Client()")
         storage_client = storage.Client()
+        print("Step 1: SUCCESS.")
+
+        print(f"Step 2: Getting bucket object for '{MODEL_BUCKET_NAME}'")
         bucket = storage_client.bucket(MODEL_BUCKET_NAME)
+        print("Step 2: SUCCESS.")
+
+        print(f"Step 3: Getting blob object for '{MODEL_BLOB_NAME}'")
         blob = bucket.blob(MODEL_BLOB_NAME)
+        print("Step 3: SUCCESS.")
         
-        print(f"Downloading model from gs://{MODEL_BUCKET_NAME}/{MODEL_BLOB_NAME}...")
+        print(f"Step 4: Starting download from gs://{MODEL_BUCKET_NAME}/{MODEL_BLOB_NAME} to {LOCAL_MODEL_PATH}")
         blob.download_to_filename(LOCAL_MODEL_PATH)
-        print("Model downloaded successfully.")
+        print("Step 4: SUCCESS. Model downloaded.")
         return True
     except Exception as e:
-        print(f"Error downloading model: {e}")
+        print(f"CRITICAL: An exception occurred during model download.")
+        # Print the full exception traceback to the logs
+        import traceback
+        traceback.print_exc()
         return False
 
 def load_model():
