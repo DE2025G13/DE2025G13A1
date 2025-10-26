@@ -83,7 +83,8 @@ def evaluate_and_decide(
 
     print("\n--- Making Final Decision ---")
     decision = "keep_old"
-    if best_candidate_score > prod_score:
+    # CHANGE THIS BACK TO >!!!!!
+    if best_candidate_score >= prod_score:
         print(f"DECISION: New model '{best_candidate_name}' is better. Promoting.")
         decision = "deploy_new"
     else:
