@@ -1,3 +1,6 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
 - name: 'gcr.io/cloud-builders/gsutil'
   args: ['cp', '${_NEW_MODEL_URI}', 'gs://yannick-wine-models/production_model/model.joblib']

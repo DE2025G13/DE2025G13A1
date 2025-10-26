@@ -1,5 +1,5 @@
 from kfp import dsl
-from kfp.dsl import Dataset, Input, Output, Model, Metrics
+from kfp.dsl import Dataset, Input, Output, Model, Metrics, OutputPath
 
 IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo"
 
@@ -61,8 +61,8 @@ def model_evaluator_op(
     logistic_regression_model: Input[Model],
     model_bucket_name: str,
     prod_model_blob: str,
-    decision: Output[str],
-    best_model_uri: Output[str],
+    decision: OutputPath(str),
+    best_model_uri: OutputPath(str),
     metrics: Output[Metrics],
 ):
     """Factory for the model evaluator component."""
@@ -76,8 +76,8 @@ def model_evaluator_op(
             "--logistic_regression_model_path", logistic_regression_model.path,
             "--model_bucket_name", model_bucket_name,
             "--prod_model_blob", prod_model_blob,
-            "--decision", decision.path,
-            "--best_model_uri", best_model_uri.path,
+            "--decision", decision,
+            "--best_model_uri", best_model_uri,
             "--metrics", metrics.path,
         ]
     )

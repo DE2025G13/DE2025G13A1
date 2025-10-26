@@ -195,9 +195,9 @@ deploymentSpec:
         - --prod_model_blob
         - '{{$.inputs.parameters[''prod_model_blob'']}}'
         - --decision
-        - '{{$.outputs.artifacts[''decision''].path}}'
+        - '{{$.outputs.parameters[''decision''].output_file}}'
         - --best_model_uri
-        - '{{$.outputs.artifacts[''best_model_uri''].path}}'
+        - '{{$.outputs.parameters[''best_model_uri''].output_file}}'
         - --metrics
         - '{{$.outputs.artifacts[''metrics''].path}}'
         command:
