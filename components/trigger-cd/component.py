@@ -29,7 +29,7 @@ def trigger_cloud_build(project_id: str, trigger_id: str, new_model_uri: str):
 
     data = {
         "substitutions": {
-            "_NEW_MODEL_URI": new_model_uri
+            "_NEW_MODEL_URI": gcs_uri,
         }
     }
     print(f"Payload being sent to Cloud Build: {data}")
