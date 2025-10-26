@@ -3,6 +3,7 @@ import requests
 import os
 import google.auth
 import google.auth.transport.requests
+from google.oauth2 import id_token
 
 app = Flask(__name__)
 
@@ -18,9 +19,9 @@ def get_identity_token(audience):
         auth_req = google.auth.transport.requests.Request()
         
         print(f"Fetching identity token for audience: {audience}")
-        id_token = google.oauth2.id_token.fetch_id_token(auth_req, audience)
+        token = id_token.fetch_id_token(auth_req, audience)
         print("Successfully fetched identity token.")
-        return id_token
+        return token
     except Exception as e:
         print(f"CRITICAL: Failed to fetch identity token. Error: {e}")
         raise
@@ -43,11 +44,11 @@ def predict():
         api_endpoint = f"{PREDICTOR_API_URL}/predict"
         
         # Get an identity token for the private API service.
-        id_token = get_identity_token(audience=PREDICTOR_API_URL)
+        auth_token = get_identity_token(audience=PREDICTOR_API_URL)
         
         # Add the token to the authorization header.
         headers = {
-            "Authorization": f"Bearer {id_token}",
+            "Authorization": f"Bearer {auth_token}",
             "Content-Type": "application/json"
         }
 
