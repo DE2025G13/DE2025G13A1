@@ -31,10 +31,13 @@ steps:
   waitFor: ['DeployAPI']
 
 - name: 'gcr.io/cloud-builders/docker'
+  id: BuildUI
   args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-ui:latest', '.']
   dir: 'prediction-ui'
 - name: 'gcr.io/cloud-builders/docker'
+  id: PushUI
   args: ['push', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-ui:latest']
+  waitFor: ['BuildUI']
 
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: 'bash'
@@ -48,4 +51,4 @@ steps:
       --platform=managed \
       --allow-unauthenticated \
       --set-env-vars=PREDICTOR_API_URL=$$API_URL
-  waitFor: ['GetApiUrl']
+  waitFor: ['GetApiUrl', 'PushUI'] 
