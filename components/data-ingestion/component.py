@@ -4,9 +4,7 @@ from google.cloud import storage
 
 def ingest_data(bucket_name: str, blob_name: str, output_dataset_path: str):
     """Downloads a file from GCS into the KFP-provided output directory."""
-    
-    # KFP creates the directory for you. `output_dataset_path` will be a path like /gcs/....
-    # We will save the data inside this directory.
+
     os.makedirs(output_dataset_path, exist_ok=True)
     output_filename = os.path.join(output_dataset_path, "data.csv")
     
