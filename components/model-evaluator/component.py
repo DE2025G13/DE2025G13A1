@@ -94,8 +94,6 @@ def evaluate_and_decide(
     # Ensure the directories for ALL output files exist before writing to them.
     print("\n--- Writing Output Artifacts ---")
     os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
-    os.makedirs(os.path.dirname(decision_path), exist_ok=True)
-    os.makedirs(os.path.dirname(best_model_uri_path), exist_ok=True)
     # -----------------------
 
     with open(metrics_path, 'w') as f:
