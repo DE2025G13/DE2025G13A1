@@ -105,7 +105,7 @@ def wine_quality_pipeline(
         model_bucket_name=model_bucket,
         prod_model_blob="production_model/model.joblib",
     ).set_caching_options(enable_caching=False)
-    # This 'If' block creates a conditional branch in our pipeline.
+    # This 'If' block creates a conditional branch inside of our pipeline.
     with dsl.If(eval_task.outputs["decision"] == "deploy_new", name="if-new-model-is-better"):
         trigger_cd_pipeline_op(
             project_id=project_id,
