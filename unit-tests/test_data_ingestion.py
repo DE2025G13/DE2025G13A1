@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import pytest
 import importlib.util
+from unittest.mock import Mock, patch
 
 INGESTION_PATH = "components/data-ingestion/component.py"
 
@@ -27,11 +28,22 @@ def mock_raw_data():
         "quality": [5, 6, 5, 7]
     })
 
-def test_data_ingestion(mock_raw_data, tmp_path):
-    input_path = tmp_path / "wine.csv"
+@patch('google.cloud.storage.Client')
+def test_data_ingestion(mock_storage_client, mock_raw_data, tmp_path):
+    mock_client = Mock()
+    mock_bucket = Mock()
+    mock_blob = Mock()
+    mock_storage_client.return_value = mock_client
+    mock_client.bucket.return_value = mock_bucket
+    mock_bucket.blob.return_value = mock_blob
+    temp_csv = tmp_path / "temp_wine.csv"
+    mock_raw_data.to_csv(temp_csv, index=False, sep=";")
+    def mock_download(filename):
+        import shutil
+        shutil.copy(temp_csv, filename)
+    mock_blob.download_to_filename = mock_download
     output_dir = tmp_path / "output"
-    mock_raw_data.to_csv(input_path, index=False)
-    load_data(str(input_path), str(output_dir))
+    load_data("gs://test-bucket/wine.csv", str(output_dir))
     output_file = output_dir / "wine.csv"
     assert output_file.exists(), "Output file not created"
     df = pd.read_csv(output_file)

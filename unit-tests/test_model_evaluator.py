@@ -5,6 +5,7 @@ import joblib
 import importlib.util
 from sklearn.ensemble import RandomForestClassifier
 import json
+from unittest.mock import Mock, patch, MagicMock
 
 EVALUATOR_PATH = "components/model-evaluator/component.py"
 
@@ -51,26 +52,38 @@ def mock_evaluation_data(tmp_path):
     joblib.dump(svm_model, svm_dir / "model.joblib")
     return str(train_dir), str(test_dir), str(rf_dir), str(xgb_dir), str(svm_dir)
 
-def test_evaluator_runs(mock_evaluation_data, tmp_path):
+@patch('google.cloud.storage.Client')
+def test_evaluator_runs(mock_storage_client, mock_evaluation_data, tmp_path):
     train_dir, test_dir, rf_dir, xgb_dir, svm_dir = mock_evaluation_data
+    mock_client = Mock()
+    mock_bucket = Mock()
+    mock_blob = Mock()
+    mock_blob.exists.return_value = False
+    mock_storage_client.return_value = mock_client
+    mock_client.bucket.return_value = mock_bucket
+    mock_bucket.blob.return_value = mock_blob
     decision_path = tmp_path / "decision.txt"
     uri_path = tmp_path / "uri.txt"
     metrics_path = tmp_path / "metrics.json"
-    try:
-        evaluate_and_decide(
-            train_dir, test_dir, rf_dir, xgb_dir, svm_dir,
-            "test-bucket", "test.joblib", "config-bucket", "config.json",
-            str(decision_path), str(uri_path), str(metrics_path)
-        )
-    except Exception as e:
-        if "credentials" in str(e).lower() or "authentication" in str(e).lower():
-            pytest.skip("Skipping due to GCS authentication requirement")
-        raise
+    evaluate_and_decide(
+        train_dir, test_dir, rf_dir, xgb_dir, svm_dir,
+        "test-bucket", "test.joblib", "config-bucket", "config.json",
+        str(decision_path), str(uri_path), str(metrics_path)
+    )
     assert decision_path.exists(), "Decision file not created"
     assert uri_path.exists(), "URI file not created"
     assert metrics_path.exists(), "Metrics file not created"
+    with open(decision_path) as f:
+        decision = f.read().strip()
+    assert decision in ["deploy_new", "keep_current"], f"Invalid decision: {decision}"
     with open(metrics_path) as f:
         metrics = json.load(f)
     assert "decision" in metrics, "Metrics missing decision"
     assert "selected_model" in metrics, "Metrics missing selected_model"
     assert "all_candidates" in metrics, "Metrics missing all_candidates"
+    assert metrics["decision"] == decision, "Decision mismatch"
+    for model_name in ["random_forest", "xgboost", "svm"]:
+        assert model_name in metrics["all_candidates"], f"Missing {model_name} in candidates"
+        candidate = metrics["all_candidates"][model_name]
+        assert "cv_score_mean" in candidate, f"Missing CV score for {model_name}"
+        assert "test_accuracy" in candidate, f"Missing test accuracy for {model_name}"
