@@ -3,7 +3,6 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # All the component build steps remain exactly the same.
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildDataIngestion"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest", "."]
@@ -32,7 +31,7 @@ steps:
     id: "BuildTriggerCD"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest", "."]
     dir: "components/trigger-cd"
-  # Step 1: Use a python container to install SDKs and compile the pipeline.
+  # Step for compiling the pipeline using a Python image.
   - name: "python:3.9-slim"
     id: "CompilePipeline"
     entrypoint: "bash"
@@ -41,26 +40,28 @@ steps:
       - |
         pip install google-cloud-aiplatform kfp
         python3 pipeline.py
-    # This step will only start after all the Docker image builds are complete.
     waitFor: ["BuildDataIngestion", "BuildSplitter", "BuildRandomForest", "BuildXGBoost", "BuildSVM", "BuildEvaluator", "BuildTriggerCD"]
-  # Step 2: Use the Google Cloud SDK container to run the compiled pipeline.
+  # Step for running the pipeline using the Google Cloud SDK image.
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: "RunTrainingPipeline"
-    entrypoint: "gcloud"
+    entrypoint: "bash"
     args:
-      - "ai"
-      - "pipelines"
-      - "run"
-      - "--project=${PROJECT_ID}"
-      - "--region=europe-west4"
-      - "--template-path=wine_quality_pipeline_git_triggered.yaml"
-      - "--display-name=ci-triggered-run-${SHORT_SHA}"
-      - "--pipeline-root=gs://yannick-pipeline-root"
-      - "--service-account=793868790421-compute@developer.gserviceaccount.com"
-      - "--enable-caching=false"
-    # This step must wait for the compilation to finish.
+      - "-c"
+      - |
+        # THIS IS THE FIX: Install the beta components before running the command.
+        gcloud components install beta --quiet
+        
+        # Now the rest of the command will work.
+        gcloud ai pipelines run \
+          --project=${PROJECT_ID} \
+          --region=europe-west4 \
+          --template-path=wine_quality_pipeline_git_triggered.yaml \
+          --display-name=ci-triggered-run-${SHORT_SHA} \
+          --pipeline-root=gs://yannick-pipeline-root \
+          --service-account=793868790421-compute@developer.gserviceaccount.com \
+          --enable-caching=false
     waitFor: ["CompilePipeline"]
-# The list of images to push remains the same.
+
 images:
   - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest"
   - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest"

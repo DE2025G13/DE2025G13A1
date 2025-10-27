@@ -1,5 +1,4 @@
 # This file's only job is to compile and start a Vertex AI pipeline run.
-# It's meant to be triggered by changes to the 'dataset' branch.
 steps:
   # Step 1: Use a python container for all python-related tasks.
   - name: "python:3.9-slim"
@@ -13,16 +12,20 @@ steps:
   # Step 2: Use the Google Cloud SDK container to submit the pipeline.
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: "RunTrainingPipeline"
-    entrypoint: "gcloud"
+    entrypoint: "bash"
     args:
-      - "ai"
-      - "pipelines"
-      - "run"
-      - "--project=${PROJECT_ID}"
-      - "--region=europe-west4"
-      - "--template-path=wine_quality_pipeline_git_triggered.yaml"
-      - "--display-name=data-triggered-run-${SHORT_SHA}"
-      - "--pipeline-root=gs://yannick-pipeline-root"
-      - "--service-account=793868790421-compute@developer.gserviceaccount.com"
-      - "--enable-caching=false"
+      - "-c"
+      - |
+        # THIS IS THE FIX: Install the beta components before running the command.
+        gcloud components install beta --quiet
+        
+        # Now the rest of the command will work.
+        gcloud ai pipelines run \
+          --project=${PROJECT_ID} \
+          --region=europe-west4 \
+          --template-path=wine_quality_pipeline_git_triggered.yaml \
+          --display-name=data-triggered-run-${SHORT_SHA} \
+          --pipeline-root=gs://yannick-pipeline-root \
+          --service-account=793868790421-compute@developer.gserviceaccount.com \
+          --enable-caching=false
     waitFor: ["CompilePipeline"]
