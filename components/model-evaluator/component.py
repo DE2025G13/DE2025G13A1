@@ -54,11 +54,12 @@ def evaluate_and_decide(
         loaded_data = joblib.load(model_file)
         if isinstance(loaded_data, dict) and "model" in loaded_data:
             model = loaded_data["model"]
-            quality_offset = loaded_data.get("quality_offset", 0)
-            print(f"{name} - Quality offset: {quality_offset}")
+            if "label_encoder" in loaded_data:
+                print(f"{name} - Quality classes: {loaded_data['label_encoder'].classes_}")
+            else:
+                print(f"{name} - No label encoder (uses original classes)")
         else:
             model = loaded_data
-            quality_offset = 0
         
         scores = cross_val_score(model, X_train, y_train, cv=cv_strategy, scoring="accuracy")
         avg_score = scores.mean()
@@ -71,7 +72,6 @@ def evaluate_and_decide(
     
     print(f"Best candidate model: {best_candidate_name} with CV score {best_candidate_cv_score:.4f}")
     
-    # Calculate candidate metrics
     y_pred_candidate = best_candidate_model_obj.predict(X_test)
     candidate_accuracy = accuracy_score(y_test, y_pred_candidate)
     candidate_precision = precision_score(y_test, y_pred_candidate, average='weighted', zero_division=0)
@@ -96,7 +96,10 @@ def evaluate_and_decide(
         loaded_prod = joblib.load(prod_local_path)
         if isinstance(loaded_prod, dict) and "model" in loaded_prod:
             prod_model = loaded_prod["model"]
-            print(f"Production model has quality offset: {loaded_prod.get('quality_offset', 0)}")
+            if "label_encoder" in loaded_prod:
+                print(f"Production model has label encoder with classes: {loaded_prod['label_encoder'].classes_}")
+            else:
+                print("Production model has no label encoder")
         else:
             prod_model = loaded_prod
         
@@ -162,6 +165,7 @@ def evaluate_and_decide(
         print("Keeping current production model.")
         new_model_uri = f"gs://{model_bucket_name}/{prod_model_blob}"
     
+    # Write outputs
     with open(decision_path, "w") as f:
         f.write(decision)
     with open(best_model_uri_path, "w") as f:
