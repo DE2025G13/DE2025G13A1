@@ -3,105 +3,86 @@ import joblib
 import pandas as pd
 import os
 from google.cloud import storage
+import traceback
 
 app = Flask(__name__)
-
 MODEL_BUCKET_NAME = os.environ.get("MODEL_BUCKET")
 MODEL_BLOB_NAME = "production_model/model.joblib"
 LOCAL_MODEL_PATH = "/tmp/model.joblib"
-
 model = None
 
 def download_model():
-    """Downloads the model file from GCS to a local path."""
-    print("--- Starting model download attempt ---")
-    
-    # Re-check the environment variable inside the function to be certain
-    MODEL_BUCKET_NAME = os.environ.get("MODEL_BUCKET")
-    
+    print("Attempting to download the production model.")
     if not MODEL_BUCKET_NAME:
-        print("CRITICAL: MODEL_BUCKET environment variable not found.")
+        print("Fatal Error: MODEL_BUCKET environment variable is not set.")
         return False
-    
-    print(f"Target Bucket: {MODEL_BUCKET_NAME}")
-    print(f"Target Blob: {MODEL_BLOB_NAME}")
-
+    print(f"Downloading from gs://{MODEL_BUCKET_NAME}/{MODEL_BLOB_NAME}.")
     try:
-        print("Step 1: Initializing storage.Client()")
         storage_client = storage.Client()
-        print("Step 1: SUCCESS.")
-
-        print(f"Step 2: Getting bucket object for '{MODEL_BUCKET_NAME}'")
         bucket = storage_client.bucket(MODEL_BUCKET_NAME)
-        print("Step 2: SUCCESS.")
-
-        print(f"Step 3: Getting blob object for '{MODEL_BLOB_NAME}'")
         blob = bucket.blob(MODEL_BLOB_NAME)
-        print("Step 3: SUCCESS.")
-        
-        print(f"Step 4: Starting download from gs://{MODEL_BUCKET_NAME}/{MODEL_BLOB_NAME} to {LOCAL_MODEL_PATH}")
         blob.download_to_filename(LOCAL_MODEL_PATH)
-        print("Step 4: SUCCESS. Model downloaded.")
+        print("Model download was successful.")
         return True
     except Exception as e:
-        print(f"CRITICAL: An exception occurred during model download.")
-        # Print the full exception traceback to the logs
-        import traceback
+        print("A critical error occurred during model download.")
         traceback.print_exc()
         return False
 
 def load_model():
-    """Loads the model from the local file into memory."""
     global model
     if os.path.exists(LOCAL_MODEL_PATH):
         try:
+            print("Loading model from local file into memory.")
             model = joblib.load(LOCAL_MODEL_PATH)
-            print("Model loaded into memory successfully.")
+            print("Model loaded successfully.")
         except Exception as e:
-            print(f"Error loading model from disk: {e}")
+            print(f"An error occurred while loading the model file: {e}")
             model = None
     else:
-        print("Model file not found locally.")
+        print("Model file could not be found locally.")
         model = None
 
 if download_model():
     load_model()
 
-@app.route('/predict', methods=['POST'])
+@app.route("/predict", methods=["POST"])
 def predict():
     if model is None:
-        return jsonify({'error': 'Model is not available. Check server logs.'}), 503
-
+        return jsonify({"error": "Model is not available or failed to load. Please check server logs."}), 503
     try:
         data = request.get_json()
         features = [
-            "fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar",
-            "chlorides", "free_sulfur_dioxide", "total_sulfur_dioxide", "density",
-            "pH", "sulphates", "alcohol"
+            "fixed_acidity",
+            "volatile_acidity",
+            "citric_acid",
+            "residual_sugar",
+            "chlorides",
+            "free_sulfur_dioxide",
+            "total_sulfur_dioxide",
+            "density",
+            "pH",
+            "sulphates",
+            "alcohol"
         ]
-        
         input_df = pd.DataFrame([data], columns=features)
-        
         prediction_result = model.predict(input_df)
-        
         final_prediction = int(round(prediction_result[0]))
-
-        return jsonify({'prediction': final_prediction})
-
+        return jsonify({"prediction": final_prediction})
     except Exception as e:
-        return jsonify({'error': f"An error occurred during prediction: {e}"}), 400
+        return jsonify({"error": f"An error occurred during the prediction process: {e}"}), 400
 
-@app.route('/health', methods=['GET'])
+@app.route("/health", methods=["GET"])
 def health_check():
-    """Health check endpoint for Cloud Run."""
     if model:
-        return jsonify({'status': 'ok', 'model': 'loaded'}), 200
+        return jsonify({"status": "ok", "model": "loaded"}), 200
     else:
+        print("Health check failed: model not loaded. Attempting to reload.")
         if download_model():
             load_model()
             if model:
-                return jsonify({'status': 'ok', 'model': 'reloaded'}), 200
-        return jsonify({'status': 'error', 'model': 'not_loaded'}), 500
+                return jsonify({"status": "ok", "model": "reloaded"}), 200
+        return jsonify({"status": "error", "model": "not_loaded"}), 500
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))

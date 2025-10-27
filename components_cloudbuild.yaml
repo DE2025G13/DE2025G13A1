@@ -1,34 +1,35 @@
+# This file tells Cloud Build how to build all our component container images.
 options:
   logging: CLOUD_LOGGING_ONLY
-
 steps:
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest', '.']
-  dir: 'components/data-ingestion'
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest', '.']
-  dir: 'components/train-test-splitter'
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest', '.']
-  dir: 'components/model-trainers/random-forest'
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-xgb:latest', '.']
-  dir: 'components/model-trainers/xgboost'
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-svm:latest', '.']
-  dir: 'components/model-trainers/svm'
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest', '.']
-  dir: 'components/model-evaluator'
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest', '.']
-  dir: 'components/trigger-cd'
-
+  # Each step builds a Docker image for one component from its specific directory.
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest", "."]
+    dir: "components/data-ingestion"
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest", "."]
+    dir: "components/train-test-splitter"
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest", "."]
+    dir: "components/model-trainers/random-forest"
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-xgb:latest", "."]
+    dir: "components/model-trainers/xgboost"
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-svm:latest", "."]
+    dir: "components/model-trainers/svm"
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest", "."]
+    dir: "components/model-evaluator"
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest", "."]
+    dir: "components/trigger-cd"
+# This list tells Cloud Build which images to push to the Artifact Registry after they're built.
 images:
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-xgb:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-svm:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest'
+  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest"
+  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest"
+  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest"
+  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-xgb:latest"
+  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-svm:latest"
+  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest"
+  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest"
