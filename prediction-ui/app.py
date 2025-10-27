@@ -81,7 +81,7 @@ def predict():
         if quality is None:
             return render_template("result.html", error=f"API gave an unexpected response: {data}")
         rating_info = get_quality_rating(quality)
-        # We need to pass the min/max quality to the results page as well.
+        # We need to pass the minimum/maximum quality to the results page as well.
         return render_template("result.html", quality=quality, features=features, rating=rating_info,
                              min_quality=MIN_QUALITY_SCORE, max_quality=MAX_QUALITY_SCORE)
     except Exception as e:
