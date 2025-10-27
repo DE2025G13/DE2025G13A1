@@ -71,7 +71,7 @@ def predict():
         auth_token = get_identity_token(audience=PREDICTOR_API_URL)
         headers = {"Authorization": f"Bearer {auth_token}", "Content-Type": "application/json"}
         print(f"Sending prediction request to the API at {api_endpoint}.")
-        response = requests.post(api_endpoint, headers=headers, json=features, timeout=10)
+        response = requests.post(api_endpoint, headers=headers, json=features, timeout=60)
         print(f"API responded with status code: {response.status_code}.")
         response.raise_for_status()
         data = response.json()
