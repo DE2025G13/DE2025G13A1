@@ -80,7 +80,7 @@ def wine_quality_pipeline(
     split_task = train_test_splitter_op(input_dataset=ingestion_task.outputs["raw_dataset"])
 
     lr_task = train_model_op(image_name='model-trainer-lr', training_data=split_task.outputs["training_data"]).set_display_name('Train-Linear-Regression')
-    rf_task = train_model_op(image_name='model-trainer-rf', training_data=split_task.outputs["training_data"]).set_display_name('Train-Random-Forest').set_cpu_limit('4').set_memory_limit('16G')
+    rf_task = train_model_op(image_name='model-trainer-rf', training_data=split_task.outputs["training_data"]).set_display_name('Train-Random-Forest').set_cpu_limit('8').set_memory_limit('64G')
     xgb_task = train_model_op(image_name='model-trainer-xgb', training_data=split_task.outputs["training_data"]).set_display_name('Train-XGBoost')
     svm_task = train_model_op(image_name='model-trainer-svm', training_data=split_task.outputs["training_data"]).set_display_name('Train-SVM')
     
