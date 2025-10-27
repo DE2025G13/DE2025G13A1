@@ -9,14 +9,17 @@ steps:
   args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest', '.']
   dir: 'components/train-test-splitter'
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest', '.']
-  dir: 'components/model-trainers/decision-tree'
-- name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-lr:latest', '.']
   dir: 'components/model-trainers/linear-regression'
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-logr:latest', '.']
-  dir: 'components/model-trainers/logistic-regression'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest', '.']
+  dir: 'components/model-trainers/random-forest'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-xgb:latest', '.']
+  dir: 'components/model-trainers/xgboost'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-svm:latest', '.']
+  dir: 'components/model-trainers/svm'
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest', '.']
   dir: 'components/model-evaluator'
@@ -27,8 +30,9 @@ steps:
 images:
 - 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest'
 - 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-dt:latest'
 - 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-lr:latest'
-- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-logr:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-xgb:latest'
+- 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-svm:latest'
 - 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest'
 - 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest'
