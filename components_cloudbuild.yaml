@@ -14,34 +14,51 @@ steps:
     id: "UploadDataset"
     args: ["cp", "wine.csv", "gs://yannick-pipeline-root/datasets/wine-${SHORT_SHA}.csv"]
     waitFor: ["FetchDataset"]
+  - name: "python:3.9-slim"
+    id: "RunUnitTests"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        pip install pytest pandas scikit-learn joblib numpy xgboost flask google-cloud-storage --break-system-packages
+        echo "Running unit tests..."
+        pytest unit-tests/ -v -p no:warnings --tb=short
+    waitFor: ["-"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildDataIngestion"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest", "."]
     dir: "components/data-ingestion"
+    waitFor: ["RunUnitTests"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildSplitter"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest", "."]
     dir: "components/train-test-splitter"
+    waitFor: ["RunUnitTests"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildRandomForest"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest", "."]
     dir: "components/model-trainers/random-forest"
+    waitFor: ["RunUnitTests"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildXGBoost"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-xgb:latest", "."]
     dir: "components/model-trainers/xgboost"
+    waitFor: ["RunUnitTests"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildSVM"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-svm:latest", "."]
     dir: "components/model-trainers/svm"
+    waitFor: ["RunUnitTests"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildEvaluator"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest", "."]
     dir: "components/model-evaluator"
+    waitFor: ["RunUnitTests"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildTriggerCD"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest", "."]
     dir: "components/trigger-cd"
+    waitFor: ["RunUnitTests"]
   - name: "gcr.io/cloud-builders/docker"
     id: "PushAllImages"
     entrypoint: "bash"
