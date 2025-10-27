@@ -8,18 +8,34 @@ def train_model(training_data_path: str, model_artifact_path: str):
     print("Starting XGBoost training process.")
     X_train = pd.read_csv(os.path.join(training_data_path, "x_train.csv"))
     y_train = pd.read_csv(os.path.join(training_data_path, "y_train.csv"))
+
+    y_min = int(y_train.iloc[:, 0].min())
+    y_max = int(y_train.iloc[:, 0].max())
+    y_train_mapped = y_train.iloc[:, 0] - y_min
+    
+    print(f"Mapping quality scores: [{y_min}, {y_max}] -> [0, {y_max - y_min}]")
+    
     model = xgb.XGBClassifier(
         objective="multi:softmax",
         eval_metric="mlogloss",
         n_estimators=150,
         random_state=42
     )
+    
     print("Fitting the XGBoost model to the training data.")
-    model.fit(X_train, y_train.values.ravel())
-    print("Model fitting has completed.")
+    model.fit(X_train, y_train_mapped)
+    print("XGBoost model fitting has completed.")
+    
     os.makedirs(os.path.dirname(model_artifact_path), exist_ok=True)
-    joblib.dump(model, model_artifact_path)
-    print(f"XGBoost model has been saved to {model_artifact_path}.")
+    
+    model_package = {
+        "model": model,
+        "quality_offset": y_min,
+        "model_type": "xgboost"
+    }
+    
+    joblib.dump(model_package, model_artifact_path)
+    print(f"XGBoost model saved with quality offset {y_min} to {model_artifact_path}.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

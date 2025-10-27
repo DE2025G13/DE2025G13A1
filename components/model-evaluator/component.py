@@ -50,7 +50,16 @@ def evaluate_and_decide(
     for name, path in models.items():
         model_file = os.path.join(path, "model.joblib")
         print(f"Loading model from {model_file}.")
-        model = joblib.load(model_file)
+        
+        loaded_data = joblib.load(model_file)
+        if isinstance(loaded_data, dict) and "model" in loaded_data:
+            model = loaded_data["model"]
+            quality_offset = loaded_data.get("quality_offset", 0)
+            print(f"{name} - Quality offset: {quality_offset}")
+        else:
+            model = loaded_data
+            quality_offset = 0
+        
         scores = cross_val_score(model, X_train, y_train, cv=cv_strategy, scoring="accuracy")
         avg_score = scores.mean()
         print(f"{name} - Cross-Validation Accuracy: {avg_score:.4f}")
@@ -83,17 +92,22 @@ def evaluate_and_decide(
         print("Production model exists. Downloading for comparison.")
         prod_local_path = "/tmp/prod_model.joblib"
         prod_blob.download_to_filename(prod_local_path)
-        prod_model = joblib.load(prod_local_path)
+        
+        loaded_prod = joblib.load(prod_local_path)
+        if isinstance(loaded_prod, dict) and "model" in loaded_prod:
+            prod_model = loaded_prod["model"]
+            print(f"Production model has quality offset: {loaded_prod.get('quality_offset', 0)}")
+        else:
+            prod_model = loaded_prod
+        
         print("Production model loaded successfully.")
         
-        # Calculate production model metrics
         y_pred_prod = prod_model.predict(X_test)
         prod_accuracy = accuracy_score(y_test, y_pred_prod)
         prod_precision = precision_score(y_test, y_pred_prod, average='weighted', zero_division=0)
         prod_recall = recall_score(y_test, y_pred_prod, average='weighted', zero_division=0)
         prod_f1 = f1_score(y_test, y_pred_prod, average='weighted', zero_division=0)
         
-        # Calculate CV score for production model too
         prod_cv_scores = cross_val_score(prod_model, X_train, y_train, cv=cv_strategy, scoring="accuracy")
         prod_cv_score = prod_cv_scores.mean()
         
@@ -127,7 +141,6 @@ def evaluate_and_decide(
         new_model_uri = f"gs://{model_bucket_name}/{prod_model_blob}"
         print(f"New production model uploaded to: {new_model_uri}")
         
-        # Update config file in GCS
         print("Updating model configuration file.")
         config_bucket = storage_client.bucket(config_bucket_name)
         config_blob_obj = config_bucket.blob(config_blob)
@@ -149,13 +162,11 @@ def evaluate_and_decide(
         print("Keeping current production model.")
         new_model_uri = f"gs://{model_bucket_name}/{prod_model_blob}"
     
-    # Write outputs
     with open(decision_path, "w") as f:
         f.write(decision)
     with open(best_model_uri_path, "w") as f:
         f.write(new_model_uri)
     
-    # Compile comprehensive metrics
     metrics_data = {
         "decision": decision,
         "candidate_model": {
@@ -168,7 +179,6 @@ def evaluate_and_decide(
         }
     }
     
-    # Add production metrics if they exist
     if prod_metrics:
         metrics_data["production_model"] = prod_metrics
         metrics_data["improvement"] = {
