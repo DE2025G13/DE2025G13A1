@@ -116,20 +116,12 @@
         display: flex;
         flex-direction: column;
         height: 100%;
-        transition: all 0.15s;
-      }
-      .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
       }
       .metric-card.primary {
         background: linear-gradient(135deg, var(--wine-600), var(--wine-700));
         border: none;
         color: white;
         box-shadow: 0 4px 12px rgba(159, 18, 57, 0.25);
-      }
-      .metric-card.primary:hover {
-        box-shadow: 0 8px 20px rgba(159, 18, 57, 0.35);
       }
       .metric-card.primary .metric-label {
         color: rgba(255, 255, 255, 0.9);
@@ -173,7 +165,6 @@
           var(--wine-600)
         );
         border-radius: 4px;
-        transition: width 0.6s ease;
       }
       .quality-range {
         display: flex;
@@ -205,13 +196,6 @@
         border: 1px solid var(--gray-200);
         border-radius: 8px;
         padding: 0.875rem 1rem;
-        transition: all 0.15s;
-      }
-      .property-card:hover {
-        background: white;
-        border-color: var(--wine-200);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
       }
       .property-card .metric-label {
         color: var(--gray-500);
@@ -241,7 +225,6 @@
         font-size: 0.875rem;
         font-weight: 500;
         text-align: center;
-        transition: all 0.15s;
         border: 1px solid var(--gray-200);
         display: inline-block;
       }
@@ -249,7 +232,6 @@
         background: linear-gradient(135deg, var(--wine-600), var(--wine-700));
         color: white;
         border-color: var(--wine-600);
-        transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(159, 18, 57, 0.25);
       }
       .error-card {
@@ -373,13 +355,13 @@
               </div>
             </div>
             <div class="property-card">
-              <div class="metric-label">Free SO₂</div>
+              <div class="metric-label">Free Sulfur Dioxide</div>
               <div class="metric-value">
                 {{ "%.0f"|format(features.free_sulfur_dioxide) }}
               </div>
             </div>
             <div class="property-card">
-              <div class="metric-label">Total SO₂</div>
+              <div class="metric-label">Total Sulfur Dioxide</div>
               <div class="metric-value">
                 {{ "%.0f"|format(features.total_sulfur_dioxide) }}
               </div>
