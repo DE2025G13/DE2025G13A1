@@ -10,6 +10,7 @@ from sklearn.model_selection import cross_val_score, StratifiedKFold
 from google.cloud import storage
 from sklearn.linear_model import LinearRegression
 import xgboost as xgb
+import numpy as np
 
 def evaluate_and_decide(
     training_data_path: str,
@@ -43,7 +44,6 @@ def evaluate_and_decide(
     all_candidates_metrics = {}
     best_candidate_name = ""
     best_candidate_cv_score = -1.0
-    best_candidate_model_obj = None
     best_candidate_local_path = ""
     
     print("Evaluating candidate models using cross-validation on training data.")
@@ -52,36 +52,61 @@ def evaluate_and_decide(
         model_file = os.path.join(path, "model.joblib")
         print(f"Loading model from {model_file}.")
         loaded_data = joblib.load(model_file)
+        label_encoder = None
         if isinstance(loaded_data, dict) and "model" in loaded_data:
             model = loaded_data["model"]
-            if "label_encoder" in loaded_data:
-                print(f"{name} - Quality classes: {loaded_data['label_encoder'].classes_}")
+            label_encoder = loaded_data.get("label_encoder", None)
+            if label_encoder:
+                print(f"{name} - Quality classes: {label_encoder.classes_}")
             else:
                 print(f"{name} - No label encoder (uses original classes)")
         else:
             model = loaded_data
-        cv_scores = cross_val_score(model, X_train, y_train, cv=cv_strategy, scoring="accuracy")
-        avg_cv_score = cv_scores.mean()
-        y_pred = model.predict(X_test)
+        
+        y_train_for_cv = y_train
+        if label_encoder is not None:
+            print(f"{name} - Transforming labels for CV and evaluation")
+            y_train_for_cv = label_encoder.transform(y_train)
+        
+        try:
+            cv_scores = cross_val_score(model, X_train, y_train_for_cv, cv=cv_strategy, scoring="accuracy")
+            avg_cv_score = cv_scores.mean()
+            cv_std = cv_scores.std()
+            cv_scores_list = [float(s) for s in cv_scores]
+        except Exception as e:
+            print(f"ERROR: Cross-validation failed for {name}: {e}")
+            avg_cv_score = 0.0
+            cv_std = 0.0
+            cv_scores_list = [0.0] * 5
+        
+        y_pred_encoded = model.predict(X_test)
+        if label_encoder is not None:
+            y_pred = label_encoder.inverse_transform(y_pred_encoded)
+            print(f"{name} - Inverse transformed predictions")
+        else:
+            y_pred = y_pred_encoded
+        
         test_accuracy = accuracy_score(y_test, y_pred)
         test_precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
         test_recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
         test_f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+        
         all_candidates_metrics[name] = {
             "cv_score_mean": float(avg_cv_score),
-            "cv_score_std": float(cv_scores.std()),
-            "cv_scores_per_fold": [float(s) for s in cv_scores],
+            "cv_score_std": float(cv_std),
+            "cv_scores_per_fold": cv_scores_list,
             "test_accuracy": float(test_accuracy),
             "test_precision": float(test_precision),
             "test_recall": float(test_recall),
             "test_f1": float(test_f1),
             "model_file": model_file
         }
-        print(f"{name} - CV Accuracy: {avg_cv_score:.4f} (±{cv_scores.std():.4f}), Test Accuracy: {test_accuracy:.4f}")
+        
+        print(f"{name} - CV Accuracy: {avg_cv_score:.4f} (±{cv_std:.4f}), Test Accuracy: {test_accuracy:.4f}")
+        
         if avg_cv_score > best_candidate_cv_score:
             best_candidate_cv_score = avg_cv_score
             best_candidate_name = name
-            best_candidate_model_obj = model
             best_candidate_local_path = model_file
     
     print(f"Best candidate model: {best_candidate_name} with CV score {best_candidate_cv_score:.4f}")
@@ -99,32 +124,55 @@ def evaluate_and_decide(
         prod_local_path = "/tmp/prod_model.joblib"
         prod_blob.download_to_filename(prod_local_path)
         loaded_prod = joblib.load(prod_local_path)
+        prod_label_encoder = None
         if isinstance(loaded_prod, dict) and "model" in loaded_prod:
             prod_model = loaded_prod["model"]
-            if "label_encoder" in loaded_prod:
-                print(f"Production model has label encoder with classes: {loaded_prod['label_encoder'].classes_}")
+            prod_label_encoder = loaded_prod.get("label_encoder", None)
+            if prod_label_encoder:
+                print(f"Production model has label encoder with classes: {prod_label_encoder.classes_}")
             else:
                 print("Production model has no label encoder")
         else:
             prod_model = loaded_prod
+        
         print("Production model loaded successfully.")
-        y_pred_prod = prod_model.predict(X_test)
+        
+        y_train_for_prod_cv = y_train
+        if prod_label_encoder is not None:
+            y_train_for_prod_cv = prod_label_encoder.transform(y_train)
+        
+        try:
+            prod_cv_scores = cross_val_score(prod_model, X_train, y_train_for_prod_cv, cv=cv_strategy, scoring="accuracy")
+            prod_cv_score = prod_cv_scores.mean()
+            prod_cv_std = prod_cv_scores.std()
+        except Exception as e:
+            print(f"WARNING: Production model CV failed: {e}")
+            prod_cv_score = 0.0
+            prod_cv_std = 0.0
+        
+        y_pred_prod_encoded = prod_model.predict(X_test)
+        if prod_label_encoder is not None:
+            y_pred_prod = prod_label_encoder.inverse_transform(y_pred_prod_encoded)
+        else:
+            y_pred_prod = y_pred_prod_encoded
+        
         prod_accuracy = accuracy_score(y_test, y_pred_prod)
         prod_precision = precision_score(y_test, y_pred_prod, average='weighted', zero_division=0)
         prod_recall = recall_score(y_test, y_pred_prod, average='weighted', zero_division=0)
         prod_f1 = f1_score(y_test, y_pred_prod, average='weighted', zero_division=0)
-        prod_cv_scores = cross_val_score(prod_model, X_train, y_train, cv=cv_strategy, scoring="accuracy")
-        prod_cv_score = prod_cv_scores.mean()
+        
         prod_metrics = {
             "cv_score_mean": float(prod_cv_score),
-            "cv_score_std": float(prod_cv_scores.std()),
+            "cv_score_std": float(prod_cv_std),
             "test_accuracy": float(prod_accuracy),
             "test_precision": float(prod_precision),
             "test_recall": float(prod_recall),
             "test_f1": float(prod_f1)
         }
-        print(f"Production Metrics - CV: {prod_cv_score:.4f} (±{prod_cv_scores.std():.4f}), Test Accuracy: {prod_accuracy:.4f}")
+        
+        print(f"Production Metrics - CV: {prod_cv_score:.4f} (±{prod_cv_std:.4f}), Test Accuracy: {prod_accuracy:.4f}")
         print(f"Candidate Metrics  - CV: {best_candidate_cv_score:.4f} (±{best_metrics['cv_score_std']:.4f}), Test Accuracy: {best_metrics['test_accuracy']:.4f}")
+        
         if best_metrics['test_accuracy'] > prod_accuracy:
             improvement = ((best_metrics['test_accuracy'] - prod_accuracy) / prod_accuracy) * 100
             print(f"Candidate model outperforms production by {improvement:.2f}%. Decision: DEPLOY NEW MODEL.")
