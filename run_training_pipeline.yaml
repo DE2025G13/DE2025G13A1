@@ -1,5 +1,7 @@
 # This file's only job is to compile and start a Vertex AI pipeline run.
 # It's meant to be triggered by changes to the 'dataset' branch.
+options:
+  logging: CLOUD_LOGGING_ONLY
 steps:
   # First, install the Python libraries needed to compile and run the pipeline.
   - name: "python:3.9-slim"
