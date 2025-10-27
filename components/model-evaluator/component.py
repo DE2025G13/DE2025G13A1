@@ -50,6 +50,7 @@ def evaluate_and_decide(
     
     for name, path in models.items():
         model_file = os.path.join(path, "model.joblib")
+        
         print(f"Loading model from {model_file}.")
         loaded_data = joblib.load(model_file)
         label_encoder = None
