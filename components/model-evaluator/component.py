@@ -39,18 +39,18 @@ def evaluate_and_decide(
         "svm": svm_model_path,
     }
     
+    cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    all_candidates_metrics = {}
     best_candidate_name = ""
     best_candidate_cv_score = -1.0
     best_candidate_model_obj = None
     best_candidate_local_path = ""
     
     print("Evaluating candidate models using cross-validation on training data.")
-    cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     
     for name, path in models.items():
         model_file = os.path.join(path, "model.joblib")
         print(f"Loading model from {model_file}.")
-        
         loaded_data = joblib.load(model_file)
         if isinstance(loaded_data, dict) and "model" in loaded_data:
             model = loaded_data["model"]
@@ -60,26 +60,32 @@ def evaluate_and_decide(
                 print(f"{name} - No label encoder (uses original classes)")
         else:
             model = loaded_data
-        
-        scores = cross_val_score(model, X_train, y_train, cv=cv_strategy, scoring="accuracy")
-        avg_score = scores.mean()
-        print(f"{name} - Cross-Validation Accuracy: {avg_score:.4f}")
-        if avg_score > best_candidate_cv_score:
-            best_candidate_cv_score = avg_score
+        cv_scores = cross_val_score(model, X_train, y_train, cv=cv_strategy, scoring="accuracy")
+        avg_cv_score = cv_scores.mean()
+        y_pred = model.predict(X_test)
+        test_accuracy = accuracy_score(y_test, y_pred)
+        test_precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
+        test_recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
+        test_f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+        all_candidates_metrics[name] = {
+            "cv_score_mean": float(avg_cv_score),
+            "cv_score_std": float(cv_scores.std()),
+            "cv_scores_per_fold": [float(s) for s in cv_scores],
+            "test_accuracy": float(test_accuracy),
+            "test_precision": float(test_precision),
+            "test_recall": float(test_recall),
+            "test_f1": float(test_f1),
+            "model_file": model_file
+        }
+        print(f"{name} - CV Accuracy: {avg_cv_score:.4f} (±{cv_scores.std():.4f}), Test Accuracy: {test_accuracy:.4f}")
+        if avg_cv_score > best_candidate_cv_score:
+            best_candidate_cv_score = avg_cv_score
             best_candidate_name = name
             best_candidate_model_obj = model
             best_candidate_local_path = model_file
     
     print(f"Best candidate model: {best_candidate_name} with CV score {best_candidate_cv_score:.4f}")
-    
-    y_pred_candidate = best_candidate_model_obj.predict(X_test)
-    candidate_accuracy = accuracy_score(y_test, y_pred_candidate)
-    candidate_precision = precision_score(y_test, y_pred_candidate, average='weighted', zero_division=0)
-    candidate_recall = recall_score(y_test, y_pred_candidate, average='weighted', zero_division=0)
-    candidate_f1 = f1_score(y_test, y_pred_candidate, average='weighted', zero_division=0)
-    
-    print(f"Candidate Test Metrics - Accuracy: {candidate_accuracy:.4f}, Precision: {candidate_precision:.4f}, "
-          f"Recall: {candidate_recall:.4f}, F1: {candidate_f1:.4f}")
+    best_metrics = all_candidates_metrics[best_candidate_name]
     
     storage_client = storage.Client()
     bucket = storage_client.bucket(model_bucket_name)
@@ -92,7 +98,6 @@ def evaluate_and_decide(
         print("Production model exists. Downloading for comparison.")
         prod_local_path = "/tmp/prod_model.joblib"
         prod_blob.download_to_filename(prod_local_path)
-        
         loaded_prod = joblib.load(prod_local_path)
         if isinstance(loaded_prod, dict) and "model" in loaded_prod:
             prod_model = loaded_prod["model"]
@@ -102,33 +107,26 @@ def evaluate_and_decide(
                 print("Production model has no label encoder")
         else:
             prod_model = loaded_prod
-        
         print("Production model loaded successfully.")
-        
         y_pred_prod = prod_model.predict(X_test)
         prod_accuracy = accuracy_score(y_test, y_pred_prod)
         prod_precision = precision_score(y_test, y_pred_prod, average='weighted', zero_division=0)
         prod_recall = recall_score(y_test, y_pred_prod, average='weighted', zero_division=0)
         prod_f1 = f1_score(y_test, y_pred_prod, average='weighted', zero_division=0)
-        
         prod_cv_scores = cross_val_score(prod_model, X_train, y_train, cv=cv_strategy, scoring="accuracy")
         prod_cv_score = prod_cv_scores.mean()
-        
         prod_metrics = {
-            "accuracy": float(prod_accuracy),
-            "precision": float(prod_precision),
-            "recall": float(prod_recall),
-            "f1": float(prod_f1),
-            "cv_score": float(prod_cv_score)
+            "cv_score_mean": float(prod_cv_score),
+            "cv_score_std": float(prod_cv_scores.std()),
+            "test_accuracy": float(prod_accuracy),
+            "test_precision": float(prod_precision),
+            "test_recall": float(prod_recall),
+            "test_f1": float(prod_f1)
         }
-        
-        print(f"Production Test Metrics - Accuracy: {prod_accuracy:.4f}, Precision: {prod_precision:.4f}, "
-              f"Recall: {prod_recall:.4f}, F1: {prod_f1:.4f}, CV: {prod_cv_score:.4f}")
-        print(f"Candidate Test Metrics  - Accuracy: {candidate_accuracy:.4f}, Precision: {candidate_precision:.4f}, "
-              f"Recall: {candidate_recall:.4f}, F1: {candidate_f1:.4f}, CV: {best_candidate_cv_score:.4f}")
-        
-        if candidate_accuracy > prod_accuracy:
-            improvement = ((candidate_accuracy - prod_accuracy) / prod_accuracy) * 100
+        print(f"Production Metrics - CV: {prod_cv_score:.4f} (±{prod_cv_scores.std():.4f}), Test Accuracy: {prod_accuracy:.4f}")
+        print(f"Candidate Metrics  - CV: {best_candidate_cv_score:.4f} (±{best_metrics['cv_score_std']:.4f}), Test Accuracy: {best_metrics['test_accuracy']:.4f}")
+        if best_metrics['test_accuracy'] > prod_accuracy:
+            improvement = ((best_metrics['test_accuracy'] - prod_accuracy) / prod_accuracy) * 100
             print(f"Candidate model outperforms production by {improvement:.2f}%. Decision: DEPLOY NEW MODEL.")
             decision = "deploy_new"
         else:
@@ -143,33 +141,25 @@ def evaluate_and_decide(
         prod_blob.upload_from_filename(best_candidate_local_path)
         new_model_uri = f"gs://{model_bucket_name}/{prod_model_blob}"
         print(f"New production model uploaded to: {new_model_uri}")
-        
         print("Updating model configuration file.")
         config_bucket = storage_client.bucket(config_bucket_name)
         config_blob_obj = config_bucket.blob(config_blob)
-        
         config_data = {
             "production_model_uri": new_model_uri,
             "production_model_updated_at": datetime.utcnow().isoformat() + "Z",
             "production_model_name": best_candidate_name,
-            "production_model_accuracy": float(candidate_accuracy),
+            "production_model_accuracy": float(best_metrics['test_accuracy']),
             "production_model_cv_score": float(best_candidate_cv_score)
         }
-        
-        config_blob_obj.upload_from_string(
-            json.dumps(config_data, indent=2),
-            content_type='application/json'
-        )
+        config_blob_obj.upload_from_string(json.dumps(config_data, indent=2), content_type='application/json')
         print(f"Configuration updated at gs://{config_bucket_name}/{config_blob}")
     else:
         print("Keeping current production model.")
         new_model_uri = f"gs://{model_bucket_name}/{prod_model_blob}"
     
-    # Write outputs
     os.makedirs(os.path.dirname(decision_path), exist_ok=True)
     os.makedirs(os.path.dirname(best_model_uri_path), exist_ok=True)
     os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
-
     with open(decision_path, "w") as f:
         f.write(decision)
     with open(best_model_uri_path, "w") as f:
@@ -177,22 +167,52 @@ def evaluate_and_decide(
     
     metrics_data = {
         "decision": decision,
-        "candidate_model": {
+        "evaluation_timestamp": datetime.utcnow().isoformat() + "Z",
+        "dataset_info": {
+            "train_samples": len(X_train),
+            "test_samples": len(X_test),
+            "n_features": X_train.shape[1],
+            "quality_classes": sorted([int(q) for q in set(y_train)])
+        },
+        "selected_model": {
             "name": best_candidate_name,
-            "cv_score": float(best_candidate_cv_score),
-            "test_accuracy": float(candidate_accuracy),
-            "test_precision": float(candidate_precision),
-            "test_recall": float(candidate_recall),
-            "test_f1": float(candidate_f1)
-        }
+            "cv_score_mean": float(best_candidate_cv_score),
+            "cv_score_std": float(best_metrics['cv_score_std']),
+            "cv_scores_per_fold": best_metrics['cv_scores_per_fold'],
+            "test_accuracy": float(best_metrics['test_accuracy']),
+            "test_precision": float(best_metrics['test_precision']),
+            "test_recall": float(best_metrics['test_recall']),
+            "test_f1": float(best_metrics['test_f1'])
+        },
+        "all_candidates": {
+            name: {
+                "cv_score_mean": metrics["cv_score_mean"],
+                "cv_score_std": metrics["cv_score_std"],
+                "cv_scores_per_fold": metrics["cv_scores_per_fold"],
+                "test_accuracy": metrics["test_accuracy"],
+                "test_precision": metrics["test_precision"],
+                "test_recall": metrics["test_recall"],
+                "test_f1": metrics["test_f1"],
+                "selected": (name == best_candidate_name)
+            }
+            for name, metrics in all_candidates_metrics.items()
+        },
+        "model_ranking": sorted(
+            [{"model": name, "cv_score": metrics["cv_score_mean"], "test_accuracy": metrics["test_accuracy"]} 
+             for name, metrics in all_candidates_metrics.items()],
+            key=lambda x: x["cv_score"],
+            reverse=True
+        )
     }
     
     if prod_metrics:
         metrics_data["production_model"] = prod_metrics
         metrics_data["improvement"] = {
-            "accuracy_delta": float(candidate_accuracy - prod_metrics["accuracy"]),
-            "accuracy_improvement_percent": float(((candidate_accuracy - prod_metrics["accuracy"]) / prod_metrics["accuracy"]) * 100) if prod_metrics["accuracy"] > 0 else 0,
-            "cv_score_delta": float(best_candidate_cv_score - prod_metrics["cv_score"])
+            "cv_score_delta": float(best_candidate_cv_score - prod_metrics["cv_score_mean"]),
+            "cv_score_improvement_percent": float(((best_candidate_cv_score - prod_metrics["cv_score_mean"]) / prod_metrics["cv_score_mean"]) * 100) if prod_metrics["cv_score_mean"] > 0 else 0,
+            "test_accuracy_delta": float(best_metrics['test_accuracy'] - prod_metrics["test_accuracy"]),
+            "test_accuracy_improvement_percent": float(((best_metrics['test_accuracy'] - prod_metrics["test_accuracy"]) / prod_metrics["test_accuracy"]) * 100) if prod_metrics["test_accuracy"] > 0 else 0,
+            "test_f1_delta": float(best_metrics['test_f1'] - prod_metrics["test_f1"])
         }
     else:
         metrics_data["production_model"] = None
@@ -220,7 +240,6 @@ if __name__ == "__main__":
     parser.add_argument("--best_model_uri_path", type=str, required=True)
     parser.add_argument("--metrics_path", type=str, required=True)
     args = parser.parse_args()
-    
     evaluate_and_decide(
         args.training_data_path,
         args.testing_data_path,
