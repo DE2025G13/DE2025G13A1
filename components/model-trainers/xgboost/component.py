@@ -10,7 +10,6 @@ def train_model(training_data_path: str, model_artifact_path: str):
     y_train = pd.read_csv(os.path.join(training_data_path, "y_train.csv"))
     model = xgb.XGBClassifier(
         objective="multi:softmax",
-        use_label_encoder=False,
         eval_metric="mlogloss",
         n_estimators=150,
         random_state=42
