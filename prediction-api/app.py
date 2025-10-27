@@ -75,8 +75,8 @@ def predict():
     try:
         data = request.get_json()
         features = [
-            "fixed acidity", "volatile acidity", "citric acid", "residual sugar",
-            "chlorides", "free sulfur dioxide", "total sulfur dioxide", "density",
+            "fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar",
+            "chlorides", "free_sulfur_dioxide", "total_sulfur_dioxide", "density",
             "pH", "sulphates", "alcohol"
         ]
         
