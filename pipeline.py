@@ -66,20 +66,27 @@ def model_evaluator_op(
     )
 
 @dsl.container_component
-def trigger_cd_pipeline_op(project_id: str, trigger_id: str, new_model_uri: str):
+def trigger_cd_pipeline_op(project_id: str, trigger_id: str, new_model_uri: str, region: str = "europe-west4"):
     # This component's only job is to start our CD pipeline if a new model is chosen.
     return dsl.ContainerSpec(
         image=f"{IMAGE_REGISTRY_PATH}/trigger-cd:latest",
         command=["python3", "component.py"],
-        args=["--project-id", project_id, "--trigger-id", trigger_id, "--new-model-uri", new_model_uri]
+        args=[
+            "--project-id", project_id, 
+            "--trigger-id", trigger_id, 
+            "--new-model-uri", new_model_uri,
+            "--region", region
+        ]
     )
 
 @dsl.pipeline(name="wine-quality-git-triggered-pipeline")
 def wine_quality_pipeline(
+    # GCS path to the dataset (uploaded by Cloud Build)
     input_data_gcs_path: str = "gs://yannick-pipeline-root/datasets/wine-latest.csv",
     project_id: str = "data-engineering-vm",
     model_bucket: str = "yannick-wine-models",
-    cd_trigger_id: str = "f8329237-06a7-4a90-8fcc-0a49b48773b7"
+    cd_trigger_id: str = "deploy-wine-app-trigger",
+    region: str = "europe-west4"
 ):
     # This function defines the graph of our ML pipeline, connecting all the steps.
     ingestion_task = data_ingestion_op(input_data_gcs_path=input_data_gcs_path)
@@ -103,7 +110,8 @@ def wine_quality_pipeline(
         trigger_cd_pipeline_op(
             project_id=project_id,
             trigger_id=cd_trigger_id,
-            new_model_uri=eval_task.outputs["best_model_uri"]
+            new_model_uri=eval_task.outputs["best_model_uri"],
+            region=region
         )
 
 if __name__ == "__main__":
