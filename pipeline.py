@@ -85,7 +85,7 @@ def wine_quality_pipeline(
     model_bucket: str = "yannick-wine-models",
     config_bucket: str = "yannick-pipeline-root",
     config_blob: str = "config/model-config.json",
-    cd_trigger_id: str = "deploy-wine-app-trigger",
+    cd_trigger_id: str = "b4b2dba0-3797-495c-a78f-eaea06982348",
     region: str = "europe-west4",
     frontend_branch: str = "frontend"
 ):
