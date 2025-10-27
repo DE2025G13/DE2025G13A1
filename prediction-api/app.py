@@ -90,14 +90,17 @@ def load_model():
             if isinstance(loaded_data, dict) and "model" in loaded_data:
                 model = loaded_data["model"]
                 model_metadata = {
-                    "quality_offset": loaded_data.get("quality_offset", 0),
+                    "label_encoder": loaded_data.get("label_encoder", None),
                     "model_type": loaded_data.get("model_type", "unknown")
                 }
-                print(f"Model loaded successfully. Type: {model_metadata['model_type']}, Quality offset: {model_metadata['quality_offset']}")
+                if model_metadata["label_encoder"] is not None:
+                    print(f"Model loaded successfully. Type: {model_metadata['model_type']}, Classes: {model_metadata['label_encoder'].classes_}")
+                else:
+                    print(f"Model loaded successfully. Type: {model_metadata['model_type']}")
             else:
                 model = loaded_data
                 model_metadata = {
-                    "quality_offset": 0,
+                    "label_encoder": None,
                     "model_type": "legacy"
                 }
                 print("Model loaded (legacy format without metadata).")
@@ -140,12 +143,17 @@ def predict():
         print(f"Encoded input for model: {input_df.to_dict('records')}")
         
         prediction_result = model.predict(input_df)
-        raw_prediction = int(prediction_result[0])
+        encoded_prediction = int(prediction_result[0])
+        label_encoder = model_metadata.get("label_encoder")
+        if label_encoder is not None:
+            final_prediction = int(label_encoder.inverse_transform([encoded_prediction])[0])
+            print(f"Encoded prediction: {encoded_prediction}, Decoded: {final_prediction}")
+        else:
+            final_prediction = encoded_prediction
+            print(f"Direct prediction: {final_prediction}")
         
-        quality_offset = model_metadata.get("quality_offset", 0)
-        final_prediction = raw_prediction + quality_offset
+        final_prediction = max(0, min(10, final_prediction))
         
-        print(f"Raw prediction: {raw_prediction}, Offset: {quality_offset}, Final: {final_prediction}")
         return jsonify({"prediction": final_prediction})
     except Exception as e:
         print(f"An error occurred during prediction: {e}")
@@ -155,12 +163,15 @@ def predict():
 @app.route("/health", methods=["GET"])
 def health_check():
     if model:
-        return jsonify({
+        label_encoder = model_metadata.get("label_encoder")
+        health_info = {
             "status": "ok", 
             "model": "loaded",
-            "model_type": model_metadata.get("model_type", "unknown"),
-            "quality_offset": model_metadata.get("quality_offset", 0)
-        }), 200
+            "model_type": model_metadata.get("model_type", "unknown")
+        }
+        if label_encoder is not None:
+            health_info["quality_classes"] = label_encoder.classes_.tolist()
+        return jsonify(health_info), 200
     else:
         print("Health check failed: model not loaded. Attempting to reload.")
         if download_model():
