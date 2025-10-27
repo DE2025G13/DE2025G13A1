@@ -4,6 +4,7 @@ import joblib
 import os
 import json
 import traceback
+from datetime import datetime
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 from google.cloud import storage
@@ -18,6 +19,8 @@ def evaluate_and_decide(
     svm_model_path: str,
     model_bucket_name: str,
     prod_model_blob: str,
+    config_bucket_name: str,
+    config_blob: str,
     decision_path: str,
     best_model_uri_path: str,
     metrics_path: str,
@@ -29,86 +32,160 @@ def evaluate_and_decide(
     X_test = pd.read_csv(os.path.join(testing_data_path, "x_test.csv"))
     y_test = pd.read_csv(os.path.join(testing_data_path, "y_test.csv")).values.ravel()
     print("Data loading completed.")
+    
     models = {
         "random_forest": random_forest_model_path,
         "xgboost": xgboost_model_path,
         "svm": svm_model_path,
     }
+    
     best_candidate_name = ""
     best_candidate_cv_score = -1.0
-    best_candidate_uri = ""
-    metrics = {"scalar": []}
-    print("Selecting the best candidate model using 5-fold cross-validation.")
-    cv_splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    y_train_xgb_mapped = y_train - y_train.min()
+    best_candidate_model_obj = None
+    best_candidate_local_path = ""
+    
+    print("Evaluating candidate models using cross-validation on training data.")
+    cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    
     for name, path in models.items():
-        print(f"Cross-validating candidate model: {name}.")
-        model = joblib.load(path)
-        y_train_for_cv = y_train_xgb_mapped if name == "xgboost" else y_train
-        scores = cross_val_score(model, X_train, y_train_for_cv, cv=cv_splitter, scoring="f1_weighted", n_jobs=-1)
-        mean_score = scores.mean()
-        print(f"-> Candidate '{name}' had a Mean CV F1-Score of: {mean_score:.4f}")
-        metrics["scalar"].append({"metric": f"{name}_mean_cv_f1", "value": mean_score})
-        if mean_score > best_candidate_cv_score:
-            best_candidate_cv_score = mean_score
+        model_file = os.path.join(path, "model.joblib")
+        print(f"Loading model from {model_file}.")
+        model = joblib.load(model_file)
+        scores = cross_val_score(model, X_train, y_train, cv=cv_strategy, scoring="accuracy")
+        avg_score = scores.mean()
+        print(f"{name} - Cross-Validation Accuracy: {avg_score:.4f}")
+        if avg_score > best_candidate_cv_score:
+            best_candidate_cv_score = avg_score
             best_candidate_name = name
-            best_candidate_uri = path
-    print(f"The best candidate from cross-validation is '{best_candidate_name}' with a score of {best_candidate_cv_score:.4f}.")
-    print(f"Evaluating the best candidate, '{best_candidate_name}', on the hold-out test set.")
-    best_model = joblib.load(best_candidate_uri)
-    if best_candidate_name == "xgboost":
-        y_test_pred_raw = best_model.predict(X_test)
-        y_test_pred = y_test_pred_raw + y_test.min()
-    else:
-        y_test_pred = best_model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_test_pred)
-    precision = precision_score(y_test, y_test_pred, average="weighted", zero_division=0)
-    recall = recall_score(y_test, y_test_pred, average="weighted", zero_division=0)
-    f1 = f1_score(y_test, y_test_pred, average="weighted", zero_division=0)
-    print(f"-> Test Metrics: Accuracy={accuracy:.4f}, Precision={precision:.4f}, Recall={recall:.4f}, F1-Score={f1:.4f}")
-    metrics["scalar"].extend([
-        {"metric": "best_candidate_test_accuracy", "value": accuracy},
-        {"metric": "best_candidate_test_precision", "value": precision},
-        {"metric": "best_candidate_test_recall", "value": recall},
-        {"metric": "best_candidate_test_f1", "value": f1}
-    ])
-    best_candidate_test_score = f1
-    print("Evaluating the current production model for comparison.")
-    prod_score = -1.0
-    try:
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(model_bucket_name)
-        blob = bucket.blob(prod_model_blob)
-        if blob.exists():
-            print("Production model found, downloading for evaluation.")
-            local_prod_model_path = "/tmp/prod_model.joblib"
-            blob.download_to_filename(local_prod_model_path)
-            prod_model = joblib.load(local_prod_model_path)
-            y_prod_pred = prod_model.predict(X_test)
-            if isinstance(prod_model, xgb.XGBClassifier): y_prod_pred = prod_model.predict(X_test) + y_test.min()
-            prod_score = f1_score(y_test, y_prod_pred, average="weighted", zero_division=0)
-            print(f"-> Production model F1-Score on test set: {prod_score:.4f}")
-            metrics["scalar"].append({"metric": "production_f1_score", "value": prod_score})
+            best_candidate_model_obj = model
+            best_candidate_local_path = model_file
+    
+    print(f"Best candidate model: {best_candidate_name} with CV score {best_candidate_cv_score:.4f}")
+    
+    # Calculate candidate metrics
+    y_pred_candidate = best_candidate_model_obj.predict(X_test)
+    candidate_accuracy = accuracy_score(y_test, y_pred_candidate)
+    candidate_precision = precision_score(y_test, y_pred_candidate, average='weighted', zero_division=0)
+    candidate_recall = recall_score(y_test, y_pred_candidate, average='weighted', zero_division=0)
+    candidate_f1 = f1_score(y_test, y_pred_candidate, average='weighted', zero_division=0)
+    
+    print(f"Candidate Test Metrics - Accuracy: {candidate_accuracy:.4f}, Precision: {candidate_precision:.4f}, "
+          f"Recall: {candidate_recall:.4f}, F1: {candidate_f1:.4f}")
+    
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(model_bucket_name)
+    prod_blob = bucket.blob(prod_model_blob)
+    
+    decision = "keep_current"
+    prod_metrics = None
+    
+    if prod_blob.exists():
+        print("Production model exists. Downloading for comparison.")
+        prod_local_path = "/tmp/prod_model.joblib"
+        prod_blob.download_to_filename(prod_local_path)
+        prod_model = joblib.load(prod_local_path)
+        print("Production model loaded successfully.")
+        
+        # Calculate production model metrics
+        y_pred_prod = prod_model.predict(X_test)
+        prod_accuracy = accuracy_score(y_test, y_pred_prod)
+        prod_precision = precision_score(y_test, y_pred_prod, average='weighted', zero_division=0)
+        prod_recall = recall_score(y_test, y_pred_prod, average='weighted', zero_division=0)
+        prod_f1 = f1_score(y_test, y_pred_prod, average='weighted', zero_division=0)
+        
+        # Calculate CV score for production model too
+        prod_cv_scores = cross_val_score(prod_model, X_train, y_train, cv=cv_strategy, scoring="accuracy")
+        prod_cv_score = prod_cv_scores.mean()
+        
+        prod_metrics = {
+            "accuracy": float(prod_accuracy),
+            "precision": float(prod_precision),
+            "recall": float(prod_recall),
+            "f1": float(prod_f1),
+            "cv_score": float(prod_cv_score)
+        }
+        
+        print(f"Production Test Metrics - Accuracy: {prod_accuracy:.4f}, Precision: {prod_precision:.4f}, "
+              f"Recall: {prod_recall:.4f}, F1: {prod_f1:.4f}, CV: {prod_cv_score:.4f}")
+        print(f"Candidate Test Metrics  - Accuracy: {candidate_accuracy:.4f}, Precision: {candidate_precision:.4f}, "
+              f"Recall: {candidate_recall:.4f}, F1: {candidate_f1:.4f}, CV: {best_candidate_cv_score:.4f}")
+        
+        if candidate_accuracy > prod_accuracy:
+            improvement = ((candidate_accuracy - prod_accuracy) / prod_accuracy) * 100
+            print(f"Candidate model outperforms production by {improvement:.2f}%. Decision: DEPLOY NEW MODEL.")
+            decision = "deploy_new"
         else:
-            print("No production model found. The new model will be promoted by default.")
-    except Exception as e:
-        print(f"Could not load or evaluate production model, assuming it does not exist. Error: {e}")
-        traceback.print_exc()
-    print("Making the final promotion decision.")
-    decision = "keep_old"
-    if best_candidate_test_score > prod_score:
-        print(f"Decision: New model '{best_candidate_name}' is better and will be promoted.")
-        decision = "deploy_new"
+            print("Production model is equal or better. Decision: KEEP CURRENT MODEL.")
+            decision = "keep_current"
     else:
-        print("Decision: The current production model is better or equal, so it will be kept.")
-        best_candidate_uri = "gs://none/none"
-    print("Writing decision and metric artifacts.")
-    os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
-    with open(metrics_path, "w") as f: json.dump(metrics, f)
-    with open(decision_path, "w") as f: f.write(decision)
-    with open(best_model_uri_path, "w") as f: f.write(best_candidate_uri)
-    print("Output artifacts have been saved successfully.")
-    print("Model evaluation process finished.")
+        print("No production model exists. Decision: DEPLOY NEW MODEL (first deployment).")
+        decision = "deploy_new"
+    
+    if decision == "deploy_new":
+        print("Uploading new model to production location.")
+        prod_blob.upload_from_filename(best_candidate_local_path)
+        new_model_uri = f"gs://{model_bucket_name}/{prod_model_blob}"
+        print(f"New production model uploaded to: {new_model_uri}")
+        
+        # Update config file in GCS
+        print("Updating model configuration file.")
+        config_bucket = storage_client.bucket(config_bucket_name)
+        config_blob_obj = config_bucket.blob(config_blob)
+        
+        config_data = {
+            "production_model_uri": new_model_uri,
+            "production_model_updated_at": datetime.utcnow().isoformat() + "Z",
+            "production_model_name": best_candidate_name,
+            "production_model_accuracy": float(candidate_accuracy),
+            "production_model_cv_score": float(best_candidate_cv_score)
+        }
+        
+        config_blob_obj.upload_from_string(
+            json.dumps(config_data, indent=2),
+            content_type='application/json'
+        )
+        print(f"Configuration updated at gs://{config_bucket_name}/{config_blob}")
+    else:
+        print("Keeping current production model.")
+        new_model_uri = f"gs://{model_bucket_name}/{prod_model_blob}"
+    
+    # Write outputs
+    with open(decision_path, "w") as f:
+        f.write(decision)
+    with open(best_model_uri_path, "w") as f:
+        f.write(new_model_uri)
+    
+    # Compile comprehensive metrics
+    metrics_data = {
+        "decision": decision,
+        "candidate_model": {
+            "name": best_candidate_name,
+            "cv_score": float(best_candidate_cv_score),
+            "test_accuracy": float(candidate_accuracy),
+            "test_precision": float(candidate_precision),
+            "test_recall": float(candidate_recall),
+            "test_f1": float(candidate_f1)
+        }
+    }
+    
+    # Add production metrics if they exist
+    if prod_metrics:
+        metrics_data["production_model"] = prod_metrics
+        metrics_data["improvement"] = {
+            "accuracy_delta": float(candidate_accuracy - prod_metrics["accuracy"]),
+            "accuracy_improvement_percent": float(((candidate_accuracy - prod_metrics["accuracy"]) / prod_metrics["accuracy"]) * 100) if prod_metrics["accuracy"] > 0 else 0,
+            "cv_score_delta": float(best_candidate_cv_score - prod_metrics["cv_score"])
+        }
+    else:
+        metrics_data["production_model"] = None
+        metrics_data["improvement"] = None
+        metrics_data["note"] = "First model deployment - no production model to compare against"
+    
+    with open(metrics_path, "w") as f:
+        json.dump(metrics_data, f, indent=2)
+    
+    print("Evaluation complete.")
+    print(f"Final metrics summary:\n{json.dumps(metrics_data, indent=2)}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -119,8 +196,24 @@ if __name__ == "__main__":
     parser.add_argument("--svm_model_path", type=str, required=True)
     parser.add_argument("--model_bucket_name", type=str, required=True)
     parser.add_argument("--prod_model_blob", type=str, required=True)
+    parser.add_argument("--config_bucket_name", type=str, default="yannick-pipeline-root")
+    parser.add_argument("--config_blob", type=str, default="config/model-config.json")
     parser.add_argument("--decision_path", type=str, required=True)
     parser.add_argument("--best_model_uri_path", type=str, required=True)
     parser.add_argument("--metrics_path", type=str, required=True)
     args = parser.parse_args()
-    evaluate_and_decide(**vars(args))
+    
+    evaluate_and_decide(
+        args.training_data_path,
+        args.testing_data_path,
+        args.random_forest_model_path,
+        args.xgboost_model_path,
+        args.svm_model_path,
+        args.model_bucket_name,
+        args.prod_model_blob,
+        args.config_bucket_name,
+        args.config_blob,
+        args.decision_path,
+        args.best_model_uri_path,
+        args.metrics_path,
+    )
