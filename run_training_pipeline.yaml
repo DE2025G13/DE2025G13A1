@@ -5,7 +5,7 @@ steps:
   - name: "gcr.io/cloud-builders/gsutil"
     id: "UploadDataset"
     args: ["cp", "wine.csv", "gs://yannick-pipeline-root/datasets/wine-${SHORT_SHA}.csv"]
-  # Step 2: Fetch pipeline.py from main branch
+  # Step 2: Fetch the pipeline.py from main branch
   - name: "gcr.io/cloud-builders/git"
     id: "FetchPipeline"
     entrypoint: "bash"
