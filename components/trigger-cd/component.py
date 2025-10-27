@@ -20,8 +20,18 @@ def trigger_cloud_build(project_id: str, trigger_id: str, new_model_uri: str, re
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
     }
-    data = {"substitutions": {"_NEW_MODEL_URI": gcs_uri}}
+    data = {
+        "projectId": project_id,
+        "triggerId": trigger_id,
+        "source": {
+            "projectId": project_id,
+            "substitutions": {
+                "_NEW_MODEL_URI": gcs_uri
+            }
+        }
+    }
     print(f"Sending request to Cloud Build API: {url}")
+    print(f"Request payload: {data}")
     response = requests.post(url, headers=headers, json=data)
     if response.status_code == 200:
         print("Cloud Build trigger was successfully initiated.")
