@@ -3,6 +3,7 @@ from kfp.dsl import Dataset, Input, Output, Model, Metrics, OutputPath
 
 IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo"
 
+# Comment so we can commit to repo
 @dsl.container_component
 def data_ingestion_op(input_data_gcs_path: str, raw_dataset: Output[Dataset]):
     return dsl.ContainerSpec(
