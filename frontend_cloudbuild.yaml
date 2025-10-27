@@ -7,7 +7,7 @@ steps:
     args:
       - "-c"
       - |
-        pip install pytest flask pandas scikit-learn joblib numpy requests --break-system-packages
+        pip install pytest flask pandas scikit-learn joblib numpy requests google-cloud-storage google-auth --break-system-packages
         echo "Running frontend unit tests..."
         pytest unit-tests/ -v -p no:warnings --tb=short
     waitFor: ["-"]
