@@ -23,6 +23,8 @@ steps:
     - '--platform=managed'
     - '--no-allow-unauthenticated'
     - '--set-env-vars=MODEL_BUCKET=yannick-wine-models'
+    - '--memory=2Gi'
+    - '--min-instances=1'
     
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   id: GetApiUrl
