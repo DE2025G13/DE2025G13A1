@@ -1,6 +1,10 @@
 options:
   logging: CLOUD_LOGGING_ONLY
 steps:
+  - name: "gcr.io/cloud-builders/gsutil"
+    id: "UploadDataset"
+    args: ["cp", "wine.csv", "gs://yannick-pipeline-root/datasets/wine-${SHORT_SHA}.csv"]
+    dir: "."
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildDataIngestion"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest", "."]
@@ -68,13 +72,16 @@ steps:
             display_name='ci-triggered-run-${SHORT_SHA}',
             template_path='wine_quality_pipeline_git_triggered.yaml',
             pipeline_root='gs://yannick-pipeline-root',
-            enable_caching=False
+            enable_caching=False,
+            parameter_values={
+                'input_data_gcs_path': 'gs://yannick-pipeline-root/datasets/wine-${SHORT_SHA}.csv'
+            }
         )
         
         job.submit(service_account='793868790421-compute@developer.gserviceaccount.com')
         print(f'Pipeline submitted: {job.resource_name}')
         "
-    waitFor: ["CompilePipeline"]
+    waitFor: ["CompilePipeline", "UploadDataset"]
 images:
   - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest"
   - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest"

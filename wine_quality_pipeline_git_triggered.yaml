@@ -2,7 +2,7 @@
 # Name: wine-quality-git-triggered-pipeline
 # Inputs:
 #    cd_trigger_id: str [Default: 'deploy-wine-app-trigger']
-#    input_data_path: str [Default: 'dataset']
+#    input_data_gcs_path: str [Default: 'gs://yannick-pipeline-root/datasets/wine-latest.csv']
 #    model_bucket: str [Default: 'yannick-wine-models']
 #    project_id: str [Default: 'data-engineering-vm']
 components:
@@ -38,7 +38,7 @@ components:
     executorLabel: exec-data-ingestion-op
     inputDefinitions:
       parameters:
-        input_data_path:
+        input_data_gcs_path:
           parameterType: STRING
     outputDefinitions:
       artifacts:
@@ -170,8 +170,8 @@ deploymentSpec:
     exec-data-ingestion-op:
       container:
         args:
-        - --input-data-path
-        - '{{$.inputs.parameters[''input_data_path'']}}'
+        - --input-data-gcs-path
+        - '{{$.inputs.parameters[''input_data_gcs_path'']}}'
         - --output-dataset-path
         - '{{$.outputs.artifacts[''raw_dataset''].path}}'
         command:
@@ -300,8 +300,8 @@ root:
           name: comp-data-ingestion-op
         inputs:
           parameters:
-            input_data_path:
-              componentInputParameter: input_data_path
+            input_data_gcs_path:
+              componentInputParameter: input_data_gcs_path
         taskInfo:
           name: data-ingestion-op
       model-evaluator-op:
@@ -421,8 +421,8 @@ root:
         defaultValue: deploy-wine-app-trigger
         isOptional: true
         parameterType: STRING
-      input_data_path:
-        defaultValue: dataset
+      input_data_gcs_path:
+        defaultValue: gs://yannick-pipeline-root/datasets/wine-latest.csv
         isOptional: true
         parameterType: STRING
       model_bucket:

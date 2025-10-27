@@ -5,14 +5,13 @@ from kfp.dsl import Dataset, Input, Output, Model, Metrics, OutputPath
 IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo"
 
 @dsl.container_component
-def data_ingestion_op(github_repo_url: str, github_branch: str, raw_dataset: Output[Dataset]):
-    # Defines the data ingestion step, which now clones from GitHub.
+def data_ingestion_op(input_data_gcs_path: str, raw_dataset: Output[Dataset]):
+    # Defines the data ingestion step, which reads from GCS
     return dsl.ContainerSpec(
         image=f"{IMAGE_REGISTRY_PATH}/data-ingestion:latest",
         command=["python3", "component.py"],
         args=[
-            "--github-repo-url", github_repo_url,
-            "--github-branch", github_branch,
+            "--input-data-gcs-path", input_data_gcs_path,
             "--output-dataset-path", raw_dataset.path
         ]
     )
@@ -77,18 +76,13 @@ def trigger_cd_pipeline_op(project_id: str, trigger_id: str, new_model_uri: str)
 
 @dsl.pipeline(name="wine-quality-git-triggered-pipeline")
 def wine_quality_pipeline(
-    # GitHub repository configuration
-    github_repo_url: str = "https://github.com/YOUR_USERNAME/YOUR_REPO.git",
-    github_branch: str = "dataset",
+    input_data_gcs_path: str = "gs://yannick-pipeline-root/datasets/wine-latest.csv",
     project_id: str = "data-engineering-vm",
     model_bucket: str = "yannick-wine-models",
     cd_trigger_id: str = "deploy-wine-app-trigger"
 ):
     # This function defines the graph of our ML pipeline, connecting all the steps.
-    ingestion_task = data_ingestion_op(
-        github_repo_url=github_repo_url,
-        github_branch=github_branch
-    )
+    ingestion_task = data_ingestion_op(input_data_gcs_path=input_data_gcs_path)
     split_task = train_test_splitter_op(input_dataset=ingestion_task.outputs["raw_dataset"])
     # These three training tasks will all run in parallel to save time.
     rf_task = train_model_op(image_name="model-trainer-rf", training_data=split_task.outputs["training_data"]).set_display_name("Train-Random-Forest")
