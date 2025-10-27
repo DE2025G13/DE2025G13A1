@@ -16,7 +16,7 @@ def train_model(training_data_path: str, model_artifact_path: str):
         random_state=42
     )
     print("Fitting the XGBoost model to the training data.")
-    model.fit(X_train, y_train_mapped.values.ravel())
+    model.fit(X_train, y_train.values.ravel())
     print("Model fitting has completed.")
     os.makedirs(os.path.dirname(model_artifact_path), exist_ok=True)
     joblib.dump(model, model_artifact_path)
