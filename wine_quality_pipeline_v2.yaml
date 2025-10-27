@@ -255,6 +255,11 @@ deploymentSpec:
         - python3
         - component.py
         image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/{{$.inputs.parameters['image_name']}}:latest
+        resources:
+          cpuLimit: 4.0
+          memoryLimit: 16.0
+          resourceCpuLimit: '4'
+          resourceMemoryLimit: 16G
     exec-train-model-op-3:
       container:
         args:
