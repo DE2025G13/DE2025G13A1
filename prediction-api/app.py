@@ -2,25 +2,54 @@ from flask import Flask, request, jsonify
 import joblib
 import pandas as pd
 import os
+import json
 from google.cloud import storage
 import traceback
 
 app = Flask(__name__)
-MODEL_BUCKET_NAME = os.environ.get("MODEL_BUCKET")
-MODEL_BLOB_NAME = "production_model/model.joblib"
+CONFIG_BUCKET = os.environ.get("CONFIG_BUCKET", "yannick-pipeline-root")
+CONFIG_BLOB = os.environ.get("CONFIG_BLOB", "config/model-config.json")
 LOCAL_MODEL_PATH = "/tmp/model.joblib"
 model = None
 
+def get_production_model_uri():
+    """Fetch the production model URI from the config file in GCS"""
+    try:
+        print(f"Fetching model config from gs://{CONFIG_BUCKET}/{CONFIG_BLOB}")
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(CONFIG_BUCKET)
+        blob = bucket.blob(CONFIG_BLOB)
+        config_str = blob.download_as_text()
+        config = json.loads(config_str)
+        model_uri = config.get("production_model_uri")
+        print(f"Production model URI: {model_uri}")
+        return model_uri
+    except Exception as e:
+        print(f"Error fetching model config: {e}")
+        traceback.print_exc()
+        return None
+
 def download_model():
     print("Attempting to download the production model.")
-    if not MODEL_BUCKET_NAME:
-        print("Fatal Error: MODEL_BUCKET environment variable is not set.")
+    model_uri = get_production_model_uri()
+    if not model_uri:
+        print("Fatal Error: Could not determine production model URI.")
         return False
-    print(f"Downloading from gs://{MODEL_BUCKET_NAME}/{MODEL_BLOB_NAME}.")
+    
+    # Parse gs://bucket/path/to/model.joblib
+    if not model_uri.startswith("gs://"):
+        print(f"Invalid model URI: {model_uri}")
+        return False
+    
+    path_parts = model_uri.replace("gs://", "").split("/", 1)
+    bucket_name = path_parts[0]
+    blob_path = path_parts[1]
+    
+    print(f"Downloading from gs://{bucket_name}/{blob_path}")
     try:
         storage_client = storage.Client()
-        bucket = storage_client.bucket(MODEL_BUCKET_NAME)
-        blob = bucket.blob(MODEL_BLOB_NAME)
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
         blob.download_to_filename(LOCAL_MODEL_PATH)
         print("Model download was successful.")
         return True
@@ -53,7 +82,6 @@ def predict():
     try:
         data = request.get_json()
         print(f"Received prediction request with data: {data}")
-        # The list of expected features now includes 'type'.
         features = [
             "type",
             "fixed_acidity",
@@ -68,13 +96,9 @@ def predict():
             "sulphates",
             "alcohol"
         ]
-        # We need to create a DataFrame to hold the data in the right order.
         input_df = pd.DataFrame([data], columns=features)
-        # The model was trained on numbers, so we have to encode the 'type' here too.
-        # The UI will send 'red' or 'white'.
         input_df["type"] = input_df["type"].apply(lambda x: 1 if x == "red" else 0)
         print(f"Encoded input for model: {input_df.to_dict('records')}")
-        # Get the prediction from our loaded model.
         prediction_result = model.predict(input_df)
         final_prediction = int(round(prediction_result[0]))
         print(f"Model prediction result: {final_prediction}")
