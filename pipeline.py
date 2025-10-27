@@ -85,7 +85,7 @@ def wine_quality_pipeline(
     input_data_gcs_path: str = "gs://yannick-pipeline-root/datasets/wine-latest.csv",
     project_id: str = "data-engineering-vm",
     model_bucket: str = "yannick-wine-models",
-    cd_trigger_id: str = "deploy-wine-app-trigger",
+    cd_trigger_id: str = "b4b2dba0-3797-495c-a78f-eaea06982348",
     region: str = "europe-west4"
 ):
     # This function defines the graph of our ML pipeline, connecting all the steps.
