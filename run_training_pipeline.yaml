@@ -1,18 +1,16 @@
 # This file's only job is to compile and start a Vertex AI pipeline run.
 # It's meant to be triggered by changes to the 'dataset' branch.
 steps:
-  # First, install the Python libraries needed to compile and run the pipeline.
-  - name: "python:3.9-slim"
-    id: "InstallPipelineSDKs"
-    entrypoint: "pip"
-    args: ["install", "google-cloud-aiplatform", "kfp"]
-  # Next, compile our pipeline.py into a YAML file that Vertex AI can read.
+  # Step 1: Use a python container for all python-related tasks.
   - name: "python:3.9-slim"
     id: "CompilePipeline"
-    entrypoint: "python3"
-    args: ["pipeline.py"]
-    waitFor: ["InstallPipelineSDKs"]
-  # Finally, submit the compiled YAML to Vertex AI to start the training run.
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        pip install google-cloud-aiplatform kfp
+        python3 pipeline.py
+  # Step 2: Use the Google Cloud SDK container to submit the pipeline.
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: "RunTrainingPipeline"
     entrypoint: "gcloud"
