@@ -31,7 +31,6 @@ def train_model_op(image_name: str, training_data: Input[Dataset], model_artifac
 def model_evaluator_op(
     training_data: Input[Dataset],
     testing_data: Input[Dataset],
-    linear_regression_model: Input[Model],
     random_forest_model: Input[Model],
     xgboost_model: Input[Model],
     svm_model: Input[Model],
@@ -47,15 +46,14 @@ def model_evaluator_op(
         args=[
             "--training_data_path", training_data.path,
             "--testing_data_path", testing_data.path,
-            "--linear_regression_model_path", linear_regression_model.path,
             "--random_forest_model_path", random_forest_model.path,
             "--xgboost_model_path", xgboost_model.path,
             "--svm_model_path", svm_model.path,
             "--model_bucket_name", model_bucket_name,
             "--prod_model_blob", prod_model_blob,
-            "--decision", decision,
-            "--best_model_uri", best_model_uri,
-            "--metrics", metrics.path,
+            "--decision_path", decision,
+            "--best_model_uri_path", best_model_uri,
+            "--metrics_path", metrics.path,
         ]
     )
 
@@ -67,27 +65,25 @@ def trigger_cd_pipeline_op(project_id: str, trigger_id: str, new_model_uri: str)
         args=["--project-id", project_id, "--trigger-id", trigger_id, "--new-model-uri", new_model_uri]
     )
 
-@dsl.pipeline(name='wine-quality-end-to-end-pipeline-v2')
+@dsl.pipeline(name='wine-quality-end-to-end-pipeline')
 def wine_quality_pipeline(
     project_id: str = "data-engineering-vm",
     data_bucket: str = "yannick-wine-data",
     model_bucket: str = "yannick-wine-models",
     cd_trigger_id: str = "deploy-wine-app-trigger"
 ):
-    """An enhanced MLOps pipeline with more models and robust evaluation."""
+    """A robust MLOps pipeline comparing valid classifier models."""
     
     ingestion_task = data_ingestion_op(bucket_name=data_bucket, blob_name="raw/WineQT.csv")
     split_task = train_test_splitter_op(input_dataset=ingestion_task.outputs["raw_dataset"])
 
-    lr_task = train_model_op(image_name='model-trainer-lr', training_data=split_task.outputs["training_data"]).set_display_name('Train-Linear-Regression')
-    rf_task = train_model_op(image_name='model-trainer-rf', training_data=split_task.outputs["training_data"]).set_display_name('Train-Random-Forest').set_cpu_limit('8').set_memory_limit('64G')
+    rf_task = train_model_op(image_name='model-trainer-rf', training_data=split_task.outputs["training_data"]).set_display_name('Train-Random-Forest')
     xgb_task = train_model_op(image_name='model-trainer-xgb', training_data=split_task.outputs["training_data"]).set_display_name('Train-XGBoost')
     svm_task = train_model_op(image_name='model-trainer-svm', training_data=split_task.outputs["training_data"]).set_display_name('Train-SVM')
     
     eval_task = model_evaluator_op(
         training_data=split_task.outputs["training_data"],
         testing_data=split_task.outputs["testing_data"],
-        linear_regression_model=lr_task.outputs["model_artifact"],
         random_forest_model=rf_task.outputs["model_artifact"],
         xgboost_model=xgb_task.outputs["model_artifact"],
         svm_model=svm_task.outputs["model_artifact"],
@@ -106,6 +102,6 @@ if __name__ == '__main__':
     from kfp import compiler
     compiler.Compiler().compile(
         pipeline_func=wine_quality_pipeline,
-        package_path='wine_quality_pipeline_v2.yaml'
+        package_path='wine_quality_pipeline.yaml'
     )
-    print("\nPipeline compiled successfully to wine_quality_pipeline_v2.yaml\n")
+    print("\nPipeline compiled successfully to wine_quality_pipeline.yaml\n")

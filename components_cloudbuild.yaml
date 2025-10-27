@@ -9,9 +9,6 @@ steps:
   args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest', '.']
   dir: 'components/train-test-splitter'
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-lr:latest', '.']
-  dir: 'components/model-trainers/linear-regression'
-- name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest', '.']
   dir: 'components/model-trainers/random-forest'
 - name: 'gcr.io/cloud-builders/docker'

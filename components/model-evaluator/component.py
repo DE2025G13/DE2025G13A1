@@ -13,7 +13,6 @@ import xgboost as xgb
 def evaluate_and_decide(
     training_data_path: str,
     testing_data_path: str,
-    linear_regression_model_path: str,
     random_forest_model_path: str,
     xgboost_model_path: str,
     svm_model_path: str,
@@ -24,8 +23,8 @@ def evaluate_and_decide(
     metrics_path: str,
 ):
     """
-    Evaluates models using K-Fold CV, logs comprehensive metrics for the best one, 
-    compares it to production, and outputs the decision.
+    Evaluates valid classifier models using K-Fold CV, logs comprehensive metrics, 
+    compares to production, and outputs the decision.
     """
     print("--- Starting Model Evaluation ---")
     
@@ -37,7 +36,6 @@ def evaluate_and_decide(
     print("Data loaded successfully.")
 
     models = {
-        "linear_regression": linear_regression_model_path,
         "random_forest": random_forest_model_path,
         "xgboost": xgboost_model_path,
         "svm": svm_model_path,
@@ -77,9 +75,6 @@ def evaluate_and_decide(
         y_test_pred = y_test_pred_raw + y_test.min()
     else:
         y_test_pred = best_model.predict(X_test)
-
-    if best_candidate_name == "linear_regression":
-        y_test_pred = [round(p) for p in y_test_pred]
 
     accuracy = accuracy_score(y_test, y_test_pred)
     precision = precision_score(y_test, y_test_pred, average='weighted', zero_division=0)
@@ -142,36 +137,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--training_data_path', type=str, required=True)
     parser.add_argument('--testing_data_path', type=str, required=True)
-    parser.add_argument('--linear_regression_model_path', type=str, required=True)
     parser.add_argument('--random_forest_model_path', type=str, required=True)
     parser.add_argument('--xgboost_model_path', type=str, required=True)
     parser.add_argument('--svm_model_path', type=str, required=True)
     parser.add_argument('--model_bucket_name', type=str, required=True)
     parser.add_argument('--prod_model_blob', type=str, required=True)
-    
     parser.add_argument('--decision_path', type=str, required=True)
     parser.add_argument('--best_model_uri_path', type=str, required=True)
     parser.add_argument('--metrics_path', type=str, required=True)
-    
     args = parser.parse_args()
-    
-    try:
-        # Call the function with the parsed arguments
-        evaluate_and_decide(
-            training_data_path=args.training_data_path,
-            testing_data_path=args.testing_data_path,
-            linear_regression_model_path=args.linear_regression_model_path,
-            random_forest_model_path=args.random_forest_model_path,
-            xgboost_model_path=args.xgboost_model_path,
-            svm_model_path=args.svm_model_path,
-            model_bucket_name=args.model_bucket_name,
-            prod_model_blob=args.prod_model_blob,
-            decision_path=args.decision_path,
-            best_model_uri_path=args.best_model_uri_path,
-            metrics_path=args.metrics_path,
-        )
-    except Exception:
-        print("--- ERROR in Model Evaluator ---")
-        traceback.print_exc()
-        print("---------------------------------")
-        raise
+    evaluate_and_decide(**vars(args))

@@ -1,6 +1,6 @@
 # PIPELINE DEFINITION
 # Name: wine-quality-end-to-end-pipeline
-# Description: A full MLOps pipeline for training, evaluating, and deploying a wine quality model.
+# Description: A robust MLOps pipeline comparing valid classifier models.
 # Inputs:
 #    cd_trigger_id: str [Default: 'deploy-wine-app-trigger']
 #    data_bucket: str [Default: 'yannick-wine-data']
@@ -53,21 +53,25 @@ components:
     executorLabel: exec-model-evaluator-op
     inputDefinitions:
       artifacts:
-        decision_tree_model:
+        random_forest_model:
           artifactType:
             schemaTitle: system.Model
             schemaVersion: 0.0.1
-        linear_regression_model:
-          artifactType:
-            schemaTitle: system.Model
-            schemaVersion: 0.0.1
-        logistic_regression_model:
+        svm_model:
           artifactType:
             schemaTitle: system.Model
             schemaVersion: 0.0.1
         testing_data:
           artifactType:
             schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        training_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        xgboost_model:
+          artifactType:
+            schemaTitle: system.Model
             schemaVersion: 0.0.1
       parameters:
         model_bucket_name:
@@ -182,23 +186,25 @@ deploymentSpec:
     exec-model-evaluator-op:
       container:
         args:
+        - --training_data_path
+        - '{{$.inputs.artifacts[''training_data''].path}}'
         - --testing_data_path
         - '{{$.inputs.artifacts[''testing_data''].path}}'
-        - --decision_tree_model_path
-        - '{{$.inputs.artifacts[''decision_tree_model''].path}}'
-        - --linear_regression_model_path
-        - '{{$.inputs.artifacts[''linear_regression_model''].path}}'
-        - --logistic_regression_model_path
-        - '{{$.inputs.artifacts[''logistic_regression_model''].path}}'
+        - --random_forest_model_path
+        - '{{$.inputs.artifacts[''random_forest_model''].path}}'
+        - --xgboost_model_path
+        - '{{$.inputs.artifacts[''xgboost_model''].path}}'
+        - --svm_model_path
+        - '{{$.inputs.artifacts[''svm_model''].path}}'
         - --model_bucket_name
         - '{{$.inputs.parameters[''model_bucket_name'']}}'
         - --prod_model_blob
         - '{{$.inputs.parameters[''prod_model_blob'']}}'
-        - --decision
+        - --decision_path
         - '{{$.outputs.parameters[''decision''].output_file}}'
-        - --best_model_uri
+        - --best_model_uri_path
         - '{{$.outputs.parameters[''best_model_uri''].output_file}}'
-        - --metrics
+        - --metrics_path
         - '{{$.outputs.artifacts[''metrics''].path}}'
         command:
         - python3
@@ -264,8 +270,7 @@ deploymentSpec:
         - component.py
         image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest
 pipelineInfo:
-  description: A full MLOps pipeline for training, evaluating, and deploying a wine
-    quality model.
+  description: A robust MLOps pipeline comparing valid classifier models.
   name: wine-quality-end-to-end-pipeline
 root:
   dag:
@@ -319,15 +324,11 @@ root:
         - train-test-splitter-op
         inputs:
           artifacts:
-            decision_tree_model:
+            random_forest_model:
               taskOutputArtifact:
                 outputArtifactKey: model_artifact
                 producerTask: train-model-op
-            linear_regression_model:
-              taskOutputArtifact:
-                outputArtifactKey: model_artifact
-                producerTask: train-model-op-2
-            logistic_regression_model:
+            svm_model:
               taskOutputArtifact:
                 outputArtifactKey: model_artifact
                 producerTask: train-model-op-3
@@ -335,6 +336,14 @@ root:
               taskOutputArtifact:
                 outputArtifactKey: testing_data
                 producerTask: train-test-splitter-op
+            training_data:
+              taskOutputArtifact:
+                outputArtifactKey: training_data
+                producerTask: train-test-splitter-op
+            xgboost_model:
+              taskOutputArtifact:
+                outputArtifactKey: model_artifact
+                producerTask: train-model-op-2
           parameters:
             model_bucket_name:
               componentInputParameter: model_bucket
@@ -359,9 +368,9 @@ root:
           parameters:
             image_name:
               runtimeValue:
-                constant: model-trainer-dt
+                constant: model-trainer-rf
         taskInfo:
-          name: Train-Decision-Tree
+          name: Train-Random-Forest
       train-model-op-2:
         cachingOptions:
           enableCache: true
@@ -378,9 +387,9 @@ root:
           parameters:
             image_name:
               runtimeValue:
-                constant: model-trainer-lr
+                constant: model-trainer-xgb
         taskInfo:
-          name: Train-Linear-Regression
+          name: Train-XGBoost
       train-model-op-3:
         cachingOptions:
           enableCache: true
@@ -397,9 +406,9 @@ root:
           parameters:
             image_name:
               runtimeValue:
-                constant: model-trainer-logr
+                constant: model-trainer-svm
         taskInfo:
-          name: Train-Logistic-Regression
+          name: Train-SVM
       train-test-splitter-op:
         cachingOptions:
           enableCache: true
