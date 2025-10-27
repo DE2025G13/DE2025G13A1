@@ -22,7 +22,7 @@ steps:
         job = aiplatform.PipelineJob(
             display_name='data-triggered-run-${SHORT_SHA}',
             template_path='wine_quality_pipeline_git_triggered.yaml',
-            pipeline_root='gs://yannick-pipeline-root',
+            pipeline_root='gs://jasper-pipeline-root',
             enable_caching=False
         )
         

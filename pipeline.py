@@ -2,7 +2,7 @@ from kfp import dsl
 from kfp.dsl import Dataset, Input, Output, Model, Metrics, OutputPath
 
 # This is the base path in our Artifact Registry where the component images are stored.
-IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo"
+IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/de2024-472908 m/jasper-wine-repo"
 
 @dsl.container_component
 def data_ingestion_op(input_data_gcs_path: str, raw_dataset: Output[Dataset]):
@@ -76,9 +76,9 @@ def trigger_cd_pipeline_op(project_id: str, trigger_id: str, new_model_uri: str)
 
 @dsl.pipeline(name="wine-quality-git-triggered-pipeline")
 def wine_quality_pipeline(
-    input_data_gcs_path: str = "gs://yannick-pipeline-root/datasets/wine-latest.csv",
-    project_id: str = "data-engineering-vm",
-    model_bucket: str = "yannick-wine-models",
+    input_data_gcs_path: str = "gs://jasper-pipeline-root/datasets/wine-latest.csv",
+    project_id: str = "de2024-472908 m",
+    model_bucket: str = "jasper-wine-models",
     cd_trigger_id: str = "deploy-wine-app-trigger"
 ):
     # This function defines the graph of our ML pipeline, connecting all the steps.

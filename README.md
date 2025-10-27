@@ -27,14 +27,14 @@ We're using a bunch of different tools on Google Cloud Platform (GCP) to make th
 
 We use GCS to store all the "stuff" (artifacts) our pipeline produces. We've set up a few different buckets to keep things organized:
 
-- **`yannick-wine-models`**: This is where we store our trained models. The final, best model that's currently in production lives here.
-- **`yannick-pipeline-root`**: This is the main "workspace" for our Vertex AI pipeline. Every time the pipeline runs, it creates a new folder here to store all the intermediate data, logs, and artifacts for that specific run.
+- **`jasper-wine-models`**: This is where we store our trained models. The final, best model that's currently in production lives here.
+- **`jasper-pipeline-root`**: This is the main "workspace" for our Vertex AI pipeline. Every time the pipeline runs, it creates a new folder here to store all the intermediate data, logs, and artifacts for that specific run.
 
 ### 2. Artifact Registry
 
 This is our private Docker Hub for the project.
 
-- **Repository Name:** `yannick-wine-repo`
+- **Repository Name:** `jasper-wine-repo`
 - **What it does:** Every component of our ML pipeline (like data-ingestion, model-trainers, and the evaluator) and our final applications (`prediction-api`, `prediction-ui`) are packaged into Docker images. This registry stores all those images.
 
 ### 3. IAM Permissions (Who Can Do What)

@@ -2,9 +2,9 @@
 # Name: wine-quality-git-triggered-pipeline
 # Inputs:
 #    cd_trigger_id: str [Default: 'deploy-wine-app-trigger']
-#    input_data_gcs_path: str [Default: 'gs://yannick-pipeline-root/datasets/wine-latest.csv']
-#    model_bucket: str [Default: 'yannick-wine-models']
-#    project_id: str [Default: 'data-engineering-vm']
+#    input_data_gcs_path: str [Default: 'gs://jasper-pipeline-root/datasets/wine-latest.csv']
+#    model_bucket: str [Default: 'jasper-wine-models']
+#    project_id: str [Default: 'de2024-472908 m']
 components:
   comp-condition-1:
     dag:
@@ -177,7 +177,7 @@ deploymentSpec:
         command:
         - python3
         - component.py
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest
+        image: europe-west4-docker.pkg.dev/de2024-472908 m/jasper-wine-repo/data-ingestion:latest
     exec-model-evaluator-op:
       container:
         args:
@@ -204,7 +204,7 @@ deploymentSpec:
         command:
         - python3
         - component.py
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest
+        image: europe-west4-docker.pkg.dev/de2024-472908 m/jasper-wine-repo/model-evaluator:latest
     exec-train-model-op:
       container:
         args:
@@ -215,7 +215,7 @@ deploymentSpec:
         command:
         - python3
         - component.py
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/{{$.inputs.parameters['image_name']}}:latest
+        image: europe-west4-docker.pkg.dev/de2024-472908 m/jasper-wine-repo/{{$.inputs.parameters['image_name']}}:latest
     exec-train-model-op-2:
       container:
         args:
@@ -226,7 +226,7 @@ deploymentSpec:
         command:
         - python3
         - component.py
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/{{$.inputs.parameters['image_name']}}:latest
+        image: europe-west4-docker.pkg.dev/de2024-472908 m/jasper-wine-repo/{{$.inputs.parameters['image_name']}}:latest
     exec-train-model-op-3:
       container:
         args:
@@ -237,7 +237,7 @@ deploymentSpec:
         command:
         - python3
         - component.py
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/{{$.inputs.parameters['image_name']}}:latest
+        image: europe-west4-docker.pkg.dev/de2024-472908 m/jasper-wine-repo/{{$.inputs.parameters['image_name']}}:latest
     exec-train-test-splitter-op:
       container:
         args:
@@ -250,7 +250,7 @@ deploymentSpec:
         command:
         - python3
         - component.py
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest
+        image: europe-west4-docker.pkg.dev/de2024-472908 m/jasper-wine-repo/train-test-splitter:latest
     exec-trigger-cd-pipeline-op:
       container:
         args:
@@ -263,7 +263,7 @@ deploymentSpec:
         command:
         - python3
         - component.py
-        image: europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest
+        image: europe-west4-docker.pkg.dev/de2024-472908 m/jasper-wine-repo/trigger-cd:latest
 pipelineInfo:
   name: wine-quality-git-triggered-pipeline
 root:
@@ -422,15 +422,15 @@ root:
         isOptional: true
         parameterType: STRING
       input_data_gcs_path:
-        defaultValue: gs://yannick-pipeline-root/datasets/wine-latest.csv
+        defaultValue: gs://jasper-pipeline-root/datasets/wine-latest.csv
         isOptional: true
         parameterType: STRING
       model_bucket:
-        defaultValue: yannick-wine-models
+        defaultValue: jasper-wine-models
         isOptional: true
         parameterType: STRING
       project_id:
-        defaultValue: data-engineering-vm
+        defaultValue: de2024-472908 m
         isOptional: true
         parameterType: STRING
 schemaVersion: 2.1.0
