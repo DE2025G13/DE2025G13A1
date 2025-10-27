@@ -29,7 +29,6 @@ def evaluate_and_decide(
     """
     print("--- Starting Model Evaluation ---")
     
-    # --- Load all necessary data ---
     print("Loading training and testing data...")
     X_train = pd.read_csv(os.path.join(training_data_path, "x_train.csv"))
     y_train = pd.read_csv(os.path.join(training_data_path, "y_train.csv")).values.ravel()
@@ -49,17 +48,14 @@ def evaluate_and_decide(
     best_candidate_uri = ""
     metrics = {"scalar": []}
 
-    # --- Stage 1: Select Best Candidate Model using K-Fold Cross-Validation ---
     print("\n--- Selecting Best Candidate via 5-Fold Cross-Validation on Training Data ---")
     cv_splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    y_train_xgb_mapped = y_train - y_train.min() # Pre-map labels for XGBoost
+    y_train_xgb_mapped = y_train - y_train.min()
 
     for name, path in models.items():
         print(f"Cross-validating candidate model '{name}'...")
         model = joblib.load(path)
-        
         y_train_for_cv = y_train_xgb_mapped if name == "xgboost" else y_train
-
         scores = cross_val_score(model, X_train, y_train_for_cv, cv=cv_splitter, scoring='f1_weighted', n_jobs=-1)
         mean_score = scores.mean()
         
@@ -73,7 +69,6 @@ def evaluate_and_decide(
     
     print(f"\nBest candidate from CV is '{best_candidate_name}' with Mean F1-Score: {best_candidate_cv_score:.4f}")
     
-    # --- Stage 2: Evaluate the Best Candidate on the Hold-Out Test Set ---
     print(f"\n--- Evaluating '{best_candidate_name}' on Unseen Test Data ---")
     best_model = joblib.load(best_candidate_uri)
     
@@ -99,9 +94,8 @@ def evaluate_and_decide(
         {"metric": "best_candidate_test_f1", "value": f1}
     ])
     
-    best_candidate_test_score = f1 # Use F1 for the final promotion decision
+    best_candidate_test_score = f1
 
-    # --- Stage 3: Evaluate Production Model and Make Final Decision ---
     print("\n--- Evaluating Production Model ---")
     prod_score = -1.0
     try:
@@ -154,8 +148,30 @@ if __name__ == '__main__':
     parser.add_argument('--svm_model_path', type=str, required=True)
     parser.add_argument('--model_bucket_name', type=str, required=True)
     parser.add_argument('--prod_model_blob', type=str, required=True)
-    parser.add_argument('--decision', type=str, required=True)
-    parser.add_argument('--best_model_uri', type=str, required=True)
-    parser.add_argument('--metrics', type=str, required=True)
+    
+    parser.add_argument('--decision_path', type=str, required=True)
+    parser.add_argument('--best_model_uri_path', type=str, required=True)
+    parser.add_argument('--metrics_path', type=str, required=True)
+    
     args = parser.parse_args()
-    evaluate_and_decide(**vars(args))
+    
+    try:
+        # Call the function with the parsed arguments
+        evaluate_and_decide(
+            training_data_path=args.training_data_path,
+            testing_data_path=args.testing_data_path,
+            linear_regression_model_path=args.linear_regression_model_path,
+            random_forest_model_path=args.random_forest_model_path,
+            xgboost_model_path=args.xgboost_model_path,
+            svm_model_path=args.svm_model_path,
+            model_bucket_name=args.model_bucket_name,
+            prod_model_blob=args.prod_model_blob,
+            decision_path=args.decision_path,
+            best_model_uri_path=args.best_model_uri_path,
+            metrics_path=args.metrics_path,
+        )
+    except Exception:
+        print("--- ERROR in Model Evaluator ---")
+        traceback.print_exc()
+        print("---------------------------------")
+        raise
