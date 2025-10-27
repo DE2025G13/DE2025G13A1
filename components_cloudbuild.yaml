@@ -1,9 +1,10 @@
-# This file builds all our component images and then triggers a validation pipeline run.
+# This file builds all component images and then triggers a validation pipeline run.
 # It's designed to be triggered by a push to the 'main' branch (for code changes).
 options:
   logging: CLOUD_LOGGING_ONLY
+
 steps:
-  # Each 'id' step builds a specific Docker image for one of our pipeline components.
+  # All the component build steps remain the same.
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildDataIngestion"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest", "."]
@@ -32,32 +33,24 @@ steps:
     id: "BuildTriggerCD"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest", "."]
     dir: "components/trigger-cd"
-  # After building the images, we run the pipeline to make sure our new components work.
   - name: "python:3.9-slim"
-    id: "InstallPipelineSDKs"
-    entrypoint: "pip"
-    args: ["install", "google-cloud-aiplatform", "kfp"]
-    waitFor: ["BuildDataIngestion", "BuildSplitter", "BuildRandomForest", "BuildXGBoost", "BuildSVM", "BuildEvaluator", "BuildTriggerCD"]
-  - name: "python:3.9-slim"
-    id: "CompilePipeline"
-    entrypoint: "python3"
-    args: ["pipeline.py"]
-    waitFor: ["InstallPipelineSDKs"]
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
-    id: "RunTrainingPipeline"
-    entrypoint: "gcloud"
+    id: "CompileAndRunPipeline"
+    entrypoint: "bash"
     args:
-      - "ai"
-      - "pipelines"
-      - "run"
-      - "--project=${PROJECT_ID}"
-      - "--region=europe-west4"
-      - "--template-path=wine_quality_pipeline_git_triggered.yaml"
-      - "--display-name=ci-triggered-run-${SHORT_SHA}"
-      - "--pipeline-root=gs://yannick-pipeline-root"
-      - "--service-account=793868790421-compute@developer.gserviceaccount.com"
-      - "--enable-caching=false"
-    waitFor: ["CompilePipeline"]
+      - "-c"
+      - |
+        pip install google-cloud-aiplatform kfp
+        python3 pipeline.py
+        gcloud ai pipelines run \
+          --project=${PROJECT_ID} \
+          --region=europe-west4 \
+          --template-path=wine_quality_pipeline_git_triggered.yaml \
+          --display-name=ci-triggered-run-${SHORT_SHA} \
+          --pipeline-root=gs://yannick-pipeline-root \
+          --service-account=793868790421-compute@developer.gserviceaccount.com \
+          --enable-caching=false
+    # This step will only start after all the Docker image builds are complete.
+    waitFor: ["BuildDataIngestion", "BuildSplitter", "BuildRandomForest", "BuildXGBoost", "BuildSVM", "BuildEvaluator", "BuildTriggerCD"]
 # This list tells Cloud Build to push all the built images to the Artifact Registry.
 images:
   - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest"
