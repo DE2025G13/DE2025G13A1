@@ -166,6 +166,10 @@ def evaluate_and_decide(
         new_model_uri = f"gs://{model_bucket_name}/{prod_model_blob}"
     
     # Write outputs
+    os.makedirs(os.path.dirname(decision_path), exist_ok=True)
+    os.makedirs(os.path.dirname(best_model_uri_path), exist_ok=True)
+    os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
+
     with open(decision_path, "w") as f:
         f.write(decision)
     with open(best_model_uri_path, "w") as f:
