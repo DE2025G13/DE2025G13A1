@@ -22,11 +22,11 @@ steps:
         job = aiplatform.PipelineJob(
             display_name='data-triggered-run-${SHORT_SHA}',
             template_path='wine_quality_pipeline_git_triggered.yaml',
-            pipeline_root='gs://yannick-pipeline-root',
+            pipeline_root='gs://daan-pipeline-root',
             enable_caching=False
         )
         
-        job.submit(service_account='793868790421-compute@developer.gserviceaccount.com')
+        job.submit(service_account='949184088608-compute@developer.gserviceaccount.com')
         print(f'Pipeline submitted: {job.resource_name}')
         "
     waitFor: ["CompilePipeline"]

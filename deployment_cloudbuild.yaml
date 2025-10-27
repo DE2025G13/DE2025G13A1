@@ -5,14 +5,14 @@ options:
 steps:
   # Step 1: Copy the new winning model from the pipeline's output to the official production location.
   - name: "gcr.io/cloud-builders/gsutil"
-    args: ["cp", "${_NEW_MODEL_URI}", "gs://yannick-wine-models/production_model/model.joblib"]
+    args: ["cp", "${_NEW_MODEL_URI}", "gs://daan-wine-models/production_model/model.joblib"]
   # Step 2: Build the container image for our prediction API using the latest code.
   - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-api:latest", "."]
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/prediction-api:latest", "."]
     dir: "prediction-api"
   # Step 3: Push that API image to the Artifact Registry.
   - name: "gcr.io/cloud-builders/docker"
-    args: ["push", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-api:latest"]
+    args: ["push", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/prediction-api:latest"]
   # Step 4: Deploy the new API image to Cloud Run as a private service.
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: "DeployAPI"
@@ -21,11 +21,11 @@ steps:
       - "run"
       - "deploy"
       - "prediction-api"
-      - "--image=europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-api:latest"
+      - "--image=europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/prediction-api:latest"
       - "--region=europe-west4"
       - "--platform=managed"
       - "--no-allow-unauthenticated"
-      - "--set-env-vars=MODEL_BUCKET=yannick-wine-models"
+      - "--set-env-vars=MODEL_BUCKET=daan-wine-models"
       - "--memory=2Gi"
       - "--min-instances=1"
   # Step 5: Get the unique URL of the API service we just deployed.
@@ -37,12 +37,12 @@ steps:
   # Step 6: Build the container image for our user interface.
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildUI"
-    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-ui:latest", "."]
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/prediction-ui:latest", "."]
     dir: "prediction-ui"
   # Step 7: Push the UI image to the Artifact Registry.
   - name: "gcr.io/cloud-builders/docker"
     id: "PushUI"
-    args: ["push", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-ui:latest"]
+    args: ["push", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/prediction-ui:latest"]
     waitFor: ["BuildUI"]
   # Step 8: Deploy the UI image to Cloud Run as a public service.
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
@@ -53,7 +53,7 @@ steps:
         # This is cool: we read the API URL we saved earlier and inject it as an environment variable into the UI.
         API_URL=$(cat /workspace/api_url.txt)
         gcloud run deploy prediction-ui \
-          --image=europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-ui:latest \
+          --image=europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/prediction-ui:latest \
           --region=europe-west4 \
           --platform=managed \
           --allow-unauthenticated \

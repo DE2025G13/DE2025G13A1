@@ -12,35 +12,35 @@ steps:
         ls -la wine.csv
   - name: "gcr.io/cloud-builders/gsutil"
     id: "UploadDataset"
-    args: ["cp", "wine.csv", "gs://yannick-pipeline-root/datasets/wine-${SHORT_SHA}.csv"]
+    args: ["cp", "wine.csv", "gs://daan-pipeline-root/datasets/wine-${SHORT_SHA}.csv"]
     waitFor: ["FetchDataset"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildDataIngestion"
-    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest", "."]
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/data-ingestion:latest", "."]
     dir: "components/data-ingestion"
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildSplitter"
-    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest", "."]
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/train-test-splitter:latest", "."]
     dir: "components/train-test-splitter"
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildRandomForest"
-    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest", "."]
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-trainer-rf:latest", "."]
     dir: "components/model-trainers/random-forest"
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildXGBoost"
-    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-xgb:latest", "."]
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-trainer-xgb:latest", "."]
     dir: "components/model-trainers/xgboost"
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildSVM"
-    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-svm:latest", "."]
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-trainer-svm:latest", "."]
     dir: "components/model-trainers/svm"
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildEvaluator"
-    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest", "."]
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-evaluator:latest", "."]
     dir: "components/model-evaluator"
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildTriggerCD"
-    args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest", "."]
+    args: ["build", "-t", "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/trigger-cd:latest", "."]
     dir: "components/trigger-cd"
   - name: "gcr.io/cloud-builders/docker"
     id: "PushAllImages"
@@ -48,13 +48,13 @@ steps:
     args:
       - "-c"
       - |
-        docker push europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest
-        docker push europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest
-        docker push europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest
-        docker push europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-xgb:latest
-        docker push europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-svm:latest
-        docker push europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest
-        docker push europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest
+        docker push europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/data-ingestion:latest
+        docker push europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/train-test-splitter:latest
+        docker push europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-trainer-rf:latest
+        docker push europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-trainer-xgb:latest
+        docker push europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-trainer-svm:latest
+        docker push europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-evaluator:latest
+        docker push europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/trigger-cd:latest
     waitFor: ["BuildDataIngestion", "BuildSplitter", "BuildRandomForest", "BuildXGBoost", "BuildSVM", "BuildEvaluator", "BuildTriggerCD"]
   - name: "python:3.9-slim"
     id: "CompilePipeline"
@@ -80,22 +80,22 @@ steps:
         job = aiplatform.PipelineJob(
             display_name='ci-triggered-run-${SHORT_SHA}',
             template_path='wine_quality_pipeline_git_triggered.yaml',
-            pipeline_root='gs://yannick-pipeline-root',
+            pipeline_root='gs://daan-pipeline-root',
             enable_caching=False,
             parameter_values={
-                'input_data_gcs_path': 'gs://yannick-pipeline-root/datasets/wine-${SHORT_SHA}.csv'
+                'input_data_gcs_path': 'gs://daan-pipeline-root/datasets/wine-${SHORT_SHA}.csv'
             }
         )
         
-        job.submit(service_account='793868790421-compute@developer.gserviceaccount.com')
+        job.submit(service_account='949184088608-compute@developer.gserviceaccount.com')
         print(f'Pipeline submitted: {job.resource_name}')
         "
     waitFor: ["CompilePipeline", "UploadDataset"]
 images:
-  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest"
-  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest"
-  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-rf:latest"
-  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-xgb:latest"
-  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-trainer-svm:latest"
-  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/model-evaluator:latest"
-  - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/trigger-cd:latest"
+  - "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/data-ingestion:latest"
+  - "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/train-test-splitter:latest"
+  - "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-trainer-rf:latest"
+  - "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-trainer-xgb:latest"
+  - "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-trainer-svm:latest"
+  - "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/model-evaluator:latest"
+  - "europe-west4-docker.pkg.dev/braided-voyage-472209-n6/daan-wine-repo/trigger-cd:latest"
