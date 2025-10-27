@@ -1,19 +1,26 @@
 options:
   logging: CLOUD_LOGGING_ONLY
 steps:
-  # Build prediction-api
+  - name: "python:3.9-slim"
+    id: "RunFrontendTests"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        pip install pytest flask pandas scikit-learn joblib numpy requests --break-system-packages
+        echo "Running frontend unit tests..."
+        pytest unit-tests/ -v -p no:warnings --tb=short
+    waitFor: ["-"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildPredictionAPI"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-api:latest", "."]
     dir: "prediction-api"
-  
-  # Build prediction-ui
+    waitFor: ["RunFrontendTests"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildPredictionUI"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-ui:latest", "."]
     dir: "prediction-ui"
-  
-  # Push images
+    waitFor: ["RunFrontendTests"]
   - name: "gcr.io/cloud-builders/docker"
     id: "PushImages"
     entrypoint: "bash"
@@ -23,8 +30,6 @@ steps:
         docker push europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-api:latest
         docker push europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-ui:latest
     waitFor: ["BuildPredictionAPI", "BuildPredictionUI"]
-  
-  # Deploy prediction-api to Cloud Run
   - name: "gcr.io/cloud-builders/gcloud"
     id: "DeployPredictionAPI"
     args:
@@ -40,8 +45,6 @@ steps:
       - "--cpu=2"
       - "--timeout=120"
     waitFor: ["PushImages"]
-  
-  # Deploy prediction-ui to Cloud Run
   - name: "gcr.io/cloud-builders/gcloud"
     id: "DeployPredictionUI"
     entrypoint: "bash"
@@ -59,7 +62,6 @@ steps:
           --memory=512Mi \
           --timeout=60
     waitFor: ["DeployPredictionAPI"]
-
 images:
   - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-api:latest"
   - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-ui:latest"
