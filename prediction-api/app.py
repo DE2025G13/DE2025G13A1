@@ -9,6 +9,7 @@ import traceback
 app = Flask(__name__)
 CONFIG_BUCKET = os.environ.get("CONFIG_BUCKET", "yannick-pipeline-root")
 CONFIG_BLOB = os.environ.get("CONFIG_BLOB", "config/model-config.json")
+FALLBACK_MODEL_URI = "gs://yannick-wine-models/production_model/model.joblib"
 LOCAL_MODEL_PATH = "/tmp/model.joblib"
 model = None
 
@@ -19,15 +20,31 @@ def get_production_model_uri():
         storage_client = storage.Client()
         bucket = storage_client.bucket(CONFIG_BUCKET)
         blob = bucket.blob(CONFIG_BLOB)
+        
+        if not blob.exists():
+            print(f"Config blob does not exist! Using fallback: {FALLBACK_MODEL_URI}")
+            return FALLBACK_MODEL_URI
+        
         config_str = blob.download_as_text()
+        print(f"Downloaded config (length={len(config_str)}): [{config_str[:200]}]")
+        
+        if not config_str or config_str.strip() == "":
+            print(f"Config is empty! Using fallback: {FALLBACK_MODEL_URI}")
+            return FALLBACK_MODEL_URI
+        
         config = json.loads(config_str)
         model_uri = config.get("production_model_uri")
-        print(f"Production model URI: {model_uri}")
+        print(f"Production model URI from config: {model_uri}")
         return model_uri
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error: {e}")
+        print(f"Using fallback: {FALLBACK_MODEL_URI}")
+        return FALLBACK_MODEL_URI
     except Exception as e:
         print(f"Error fetching model config: {e}")
         traceback.print_exc()
-        return None
+        print(f"Using fallback: {FALLBACK_MODEL_URI}")
+        return FALLBACK_MODEL_URI
 
 def download_model():
     print("Attempting to download the production model.")
@@ -36,7 +53,6 @@ def download_model():
         print("Fatal Error: Could not determine production model URI.")
         return False
     
-    # Parse gs://bucket/path/to/model.joblib
     if not model_uri.startswith("gs://"):
         print(f"Invalid model URI: {model_uri}")
         return False
@@ -50,6 +66,11 @@ def download_model():
         storage_client = storage.Client()
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_path)
+        
+        if not blob.exists():
+            print(f"ERROR: Model blob does not exist at {model_uri}")
+            return False
+        
         blob.download_to_filename(LOCAL_MODEL_PATH)
         print("Model download was successful.")
         return True
@@ -67,6 +88,7 @@ def load_model():
             print("Model loaded successfully.")
         except Exception as e:
             print(f"An error occurred while loading the model file: {e}")
+            traceback.print_exc()
             model = None
     else:
         print("Model file could not be found locally.")
@@ -78,7 +100,7 @@ if download_model():
 @app.route("/predict", methods=["POST"])
 def predict():
     if model is None:
-        return jsonify({"error": "Model is not available or failed to load. Please check server logs."}), 503
+        return jsonify({"error": "Model is not available. Please run the training pipeline first."}), 503
     try:
         data = request.get_json()
         print(f"Received prediction request with data: {data}")
