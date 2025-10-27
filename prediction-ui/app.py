@@ -1,10 +1,12 @@
 from flask import Flask, render_template, request
 import requests
 import os
+import google.auth
+import google.auth.transport.requests
+from google.oauth2 import id_token
 
 app = Flask(__name__)
 
-# ===== GLOBAL CONSTANTS =====
 # These define the expected range of wine quality scores
 MIN_QUALITY_SCORE = 3
 MAX_QUALITY_SCORE = 8
@@ -26,6 +28,26 @@ QUALITY_COLORS = {
     7: '#9370DB',  # Medium purple
     8: '#8B4789',  # Deep purple
 }
+
+# Get the predictor API URL from environment
+PREDICTOR_API_URL = os.environ.get("PREDICTOR_API_URL")
+
+def get_identity_token(audience):
+    """
+    Fetches a Google-signed identity token for the given audience.
+    This is used for authenticating service-to-service calls.
+    """
+    try:
+        creds, project = google.auth.default()
+        auth_req = google.auth.transport.requests.Request()
+        
+        print(f"Fetching identity token for audience: {audience}")
+        token = id_token.fetch_id_token(auth_req, audience)
+        print("Successfully fetched identity token.")
+        return token
+    except Exception as e:
+        print(f"CRITICAL: Failed to fetch identity token. Error: {e}")
+        raise
 
 def get_quality_rating(quality_score):
     """
@@ -79,30 +101,43 @@ def index():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    """Handle prediction request and display results."""
+    """Handles form submission, calls the prediction API, and renders the result."""
+    if not PREDICTOR_API_URL:
+        return render_template('result.html', error="Predictor API URL not configured on the server.")
+
     try:
         # Extract features from form
-        features = {
-            'fixed_acidity': float(request.form['fixed_acidity']),
-            'volatile_acidity': float(request.form['volatile_acidity']),
-            'citric_acid': float(request.form['citric_acid']),
-            'residual_sugar': float(request.form['residual_sugar']),
-            'chlorides': float(request.form['chlorides']),
-            'free_sulfur_dioxide': float(request.form['free_sulfur_dioxide']),
-            'total_sulfur_dioxide': float(request.form['total_sulfur_dioxide']),
-            'density': float(request.form['density']),
-            'pH': float(request.form['pH']),
-            'sulphates': float(request.form['sulphates']),
-            'alcohol': float(request.form['alcohol']),
+        form_data = request.form.to_dict()
+        features = {key: float(value) for key, value in form_data.items()}
+        
+        api_endpoint = f"{PREDICTOR_API_URL}/predict"
+        
+        # Get an identity token for the private API service
+        auth_token = get_identity_token(audience=PREDICTOR_API_URL)
+        
+        # Add the token to the authorization header
+        headers = {
+            "Authorization": f"Bearer {auth_token}",
+            "Content-Type": "application/json"
         }
+
+        print(f"Sending authenticated request to {api_endpoint} with payload: {features}")
+        response = requests.post(api_endpoint, headers=headers, json=features, timeout=10)
         
-        # Get prediction from API
-        api_url = os.getenv('PREDICTION_API_URL', 'http://prediction-api:8080/predict')
-        response = requests.post(api_url, json=features, timeout=5)
-        response.raise_for_status()
+        # This will raise an exception for 4xx or 5xx status codes
+        response.raise_for_status() 
         
-        result = response.json()
-        quality = result.get('quality', 0)
+        data = response.json()
+        
+        # Check if there's an error in the response
+        if 'error' in data:
+            return render_template('result.html', error=data['error'])
+        
+        # Get the prediction (handle both 'prediction' and 'quality' keys for compatibility)
+        quality = data.get('prediction') or data.get('quality')
+        
+        if quality is None:
+            return render_template('result.html', error="Invalid response from prediction API.")
         
         # Get rating information
         rating_info = get_quality_rating(quality)
@@ -113,18 +148,14 @@ def predict():
                              rating=rating_info,
                              min_quality=MIN_QUALITY_SCORE,
                              max_quality=MAX_QUALITY_SCORE)
-    
+
     except requests.exceptions.RequestException as e:
-        error_message = f"Error connecting to prediction API: {str(e)}"
-        return render_template('result.html', error=error_message)
-    
+        # The response.raise_for_status() will likely trigger this for 403 errors
+        return render_template('result.html', error=f"Could not connect to the prediction API: {e}")
     except ValueError as e:
-        error_message = f"Invalid input values: {str(e)}"
-        return render_template('result.html', error=error_message)
-    
+        return render_template('result.html', error=f"Invalid input. Please ensure all fields are numbers: {e}")
     except Exception as e:
-        error_message = f"An unexpected error occurred: {str(e)}"
-        return render_template('result.html', error=error_message)
+        return render_template('result.html', error=f"An unexpected error occurred: {e}")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
