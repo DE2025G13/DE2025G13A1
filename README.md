@@ -46,7 +46,7 @@ Getting permissions right is super important. We made sure the "robot" accounts 
 
 ### 4. Cloud Build Triggers (The Automation Magic)
 
-The triggers are the heart of our automation. We have two main triggers that watch our GitHub repository:
+The triggers are the heart of our automation. We have three main triggers that watch our GitHub repository:
 
 #### Trigger 1: `build-and-run-on-code-change` (The CI Trigger)
 - **Watches:** Any push to the `main` branch.
@@ -55,6 +55,10 @@ The triggers are the heart of our automation. We have two main triggers that wat
 #### Trigger 2: `trigger-training-on-data-change` (The CT Trigger)
 - **Watches:** A push to the `dataset` branch, but *only* if files inside the `dataset/` folder have changed.
 - **Action:** When we push a new `wine.csv`, this trigger runs `run_training_pipeline.yaml`. Its only job is to start a new Vertex AI training pipeline run using the new data.
+
+#### Trigger 3: `deploy-wine-app-trigger` (The CD Trigger)
+- **Watches:** This trigger doesn't watch a Git branch. It is a webhook trigger that is invoked programmatically.
+- **Action:** At the end of a successful Vertex AI pipeline run, if the new model is better than the production model, a special pipeline component calls this trigger. The trigger then executes `deployment_cloudbuild.yaml`, which handles the entire application deployment process: copying the new model to the production GCS bucket, building the API and UI images, and deploying both services to Cloud Run.
 
 ### 5. The Vertex AI Pipeline
 
@@ -67,7 +71,7 @@ This is where the actual machine learning happens. It's a graph of steps that ru
     - It uses **k-fold cross-validation** to robustly pick the best-performing model out of the three candidates.
     - It then evaluates this "champion" model on the hold-out test set and compares its score to the model currently in production.
     - If the new one is better, it decides to deploy.
-5.  **Trigger CD (Conditional):** If the decision is to deploy, this final step kicks off our deployment pipeline.
+5.  **Trigger CD (Conditional):** If the decision is to deploy, this final step kicks off our deployment pipeline by invoking the `deploy-wine-app-trigger`.
 
 ### 6. The Deployment Pipeline (CD)
 
