@@ -1,68 +1,100 @@
 from flask import Flask, request, jsonify
+import joblib
+import pandas as pd
 import os
 from google.cloud import storage
-import tempfile
-import cv2
-import numpy as np
-import base64
-from ultralytics import YOLO
+import traceback
 
 app = Flask(__name__)
-
-MODEL_BUCKET = os.environ.get("MODEL_BUCKET")
-MODEL_BLOB = "production_model/best.pt"
-_, model_file = tempfile.mkstemp(suffix=".pt")
+MODEL_BUCKET_NAME = os.environ.get("MODEL_BUCKET")
+MODEL_BLOB_NAME = "production_model/model.joblib"
+LOCAL_MODEL_PATH = "/tmp/model.joblib"
 model = None
 
-if MODEL_BUCKET:
+def download_model():
+    print("Attempting to download the production model.")
+    if not MODEL_BUCKET_NAME:
+        print("Fatal Error: MODEL_BUCKET environment variable is not set.")
+        return False
+    print(f"Downloading from gs://{MODEL_BUCKET_NAME}/{MODEL_BLOB_NAME}.")
     try:
         storage_client = storage.Client()
-        bucket = storage_client.bucket(MODEL_BUCKET)
-        blob = bucket.blob(MODEL_BLOB)
-        blob.download_to_filename(model_file)
-        model = YOLO(model_file)
-        print("YOLOv8 model loaded successfully from GCS.")
+        bucket = storage_client.bucket(MODEL_BUCKET_NAME)
+        blob = bucket.blob(MODEL_BLOB_NAME)
+        blob.download_to_filename(LOCAL_MODEL_PATH)
+        print("Model download was successful.")
+        return True
     except Exception as e:
-        print(f"Error loading model from GCS: {e}")
+        print("A critical error occurred during model download.")
+        traceback.print_exc()
+        return False
 
-@app.route('/predict', methods=['POST'])
+def load_model():
+    global model
+    if os.path.exists(LOCAL_MODEL_PATH):
+        try:
+            print("Loading model from local file into memory.")
+            model = joblib.load(LOCAL_MODEL_PATH)
+            print("Model loaded successfully.")
+        except Exception as e:
+            print(f"An error occurred while loading the model file: {e}")
+            model = None
+    else:
+        print("Model file could not be found locally.")
+        model = None
+
+if download_model():
+    load_model()
+
+@app.route("/predict", methods=["POST"])
 def predict():
-    if not model:
-        return jsonify({'error': 'Model is not loaded'}), 500
-    
-    file = request.files.get('file')
-    if not file: return jsonify({'error': 'No file part'}), 400
-        
-    img_bytes = file.read()
-    nparr = np.frombuffer(img_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if model is None:
+        return jsonify({"error": "Model is not available or failed to load. Please check server logs."}), 503
+    try:
+        data = request.get_json()
+        print(f"Received prediction request with data: {data}")
+        # The list of expected features now includes 'type'.
+        features = [
+            "type",
+            "fixed_acidity",
+            "volatile_acidity",
+            "citric_acid",
+            "residual_sugar",
+            "chlorides",
+            "free_sulfur_dioxide",
+            "total_sulfur_dioxide",
+            "density",
+            "pH",
+            "sulphates",
+            "alcohol"
+        ]
+        # We need to create a DataFrame to hold the data in the right order.
+        input_df = pd.DataFrame([data], columns=features)
+        # The model was trained on numbers, so we have to encode the 'type' here too.
+        # The UI will send 'red' or 'white'.
+        input_df["type"] = input_df["type"].apply(lambda x: 1 if x == "red" else 0)
+        print(f"Encoded input for model: {input_df.to_dict('records')}")
+        # Get the prediction from our loaded model.
+        prediction_result = model.predict(input_df)
+        final_prediction = int(round(prediction_result[0]))
+        print(f"Model prediction result: {final_prediction}")
+        return jsonify({"prediction": final_prediction})
+    except Exception as e:
+        print(f"An error occurred during prediction: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "An internal error occurred during the prediction process."}), 400
 
-    results = model(img)
-    
-    result = results[0]
-    if len(result.boxes) == 0:
-        return jsonify({'error': 'No face detected by model'}), 400
+@app.route("/health", methods=["GET"])
+def health_check():
+    if model:
+        return jsonify({"status": "ok", "model": "loaded"}), 200
+    else:
+        print("Health check failed: model not loaded. Attempting to reload.")
+        if download_model():
+            load_model()
+            if model:
+                return jsonify({"status": "ok", "model": "reloaded"}), 200
+        return jsonify({"status": "error", "model": "not_loaded"}), 500
 
-    box = result.boxes[0]
-    coords = box.xyxy[0].tolist()
-    class_id = int(box.cls[0].item())
-    conf = box.conf[0].item()
-    label = result.names[class_id]
-    
-    x1, y1, x2, y2 = map(int, coords)
-    color = (0, 255, 0)
-    cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-    text_label = f"{label}: {conf:.2f}"
-    cv2.putText(img, text_label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-    
-    _, buffer = cv2.imencode('.jpg', img)
-    img_base64 = base64.b64encode(buffer).decode('utf-8')
-
-    return jsonify({
-        'prediction': label,
-        'confidence': conf,
-        'image_with_box': img_base64
-    })
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))

@@ -1,30 +1,364 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Prediction Result</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediction Result - Wine Quality</title>
     <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f4; color: #333; }
-        .container { background: white; padding: 20px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h1 { color: #0056b3; }
-        img { margin-top: 20px; border: 2px solid #ddd; border-radius: 4px; max-width: 90%; height: auto; }
-        a { color: #0056b3; text-decoration: none; font-weight: bold; }
-        .error { color: #d9534f; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --burgundy-dark: #5E2750;
+            --burgundy: #722F37;
+            --burgundy-light: #8B1538;
+            --gold: #D4AF37;
+            --gold-light: #FFD700;
+            --cream: #F5F5DC;
+            --cream-dark: #E8E3D5;
+            --shadow: rgba(94, 39, 80, 0.15);
+            --shadow-heavy: rgba(94, 39, 80, 0.3);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--burgundy-dark) 0%, var(--burgundy) 50%, #4A1F3A 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px var(--shadow-heavy);
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .result-hero {
+            text-align: center;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid var(--cream-dark);
+        }
+
+        .quality-score {
+            font-size: 5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--burgundy) 0%, var(--burgundy-light) 50%, var(--burgundy-dark) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+        }
+
+        .quality-label {
+            font-size: 1.5rem;
+            color: var(--burgundy-dark);
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+        }
+
+        .stars-container {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            font-size: 2.5rem;
+        }
+
+        .star {
+            color: var(--gold-light);
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+            animation: starPop 0.5s ease-out backwards;
+        }
+
+        .star.empty {
+            color: #E0E0E0;
+        }
+
+        .star:nth-child(1) { animation-delay: 0.1s; }
+        .star:nth-child(2) { animation-delay: 0.2s; }
+        .star:nth-child(3) { animation-delay: 0.3s; }
+
+        @keyframes starPop {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .quality-bar-container {
+            position: relative;
+            height: 40px;
+            background: linear-gradient(to right, 
+                #8B0000 0%, 
+                #A52A2A 20%, 
+                #CD853F 40%, 
+                #DAA520 60%, 
+                #9370DB 80%, 
+                #8B4789 100%);
+            border-radius: 20px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .quality-indicator {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            background: white;
+            border: 3px solid var(--burgundy-dark);
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: left 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .quality-range {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .quality-range span {
+            font-weight: 600;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .feature-item {
+            background: linear-gradient(135deg, var(--cream) 0%, var(--cream-dark) 100%);
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 3px solid var(--gold);
+        }
+
+        .feature-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--burgundy-dark);
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .feature-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--burgundy);
+        }
+
+        .back-btn {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 1rem 2rem;
+            background: white;
+            color: var(--burgundy-dark);
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: 2px solid var(--burgundy-dark);
+        }
+
+        .back-btn:hover {
+            background: var(--burgundy-dark);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px var(--shadow);
+        }
+
+        .error-card {
+            background: linear-gradient(135deg, #FF6B6B 0%, #C92A2A 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(201, 42, 42, 0.3);
+        }
+
+        .error-card h2 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .error-card p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+
+        .wine-bottle {
+            font-size: 6rem;
+            margin-bottom: 1rem;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+            animation: bottleSway 3s ease-in-out infinite;
+        }
+
+        @keyframes bottleSway {
+            0%, 100% { transform: rotate(-3deg); }
+            50% { transform: rotate(3deg); }
+        }
+
+        .section-title {
+            color: var(--burgundy-dark);
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--cream-dark);
+        }
+
+        @media (max-width: 768px) {
+            .quality-score {
+                font-size: 3.5rem;
+            }
+            
+            .quality-label {
+                font-size: 1.25rem;
+            }
+            
+            .stars-container {
+                font-size: 2rem;
+            }
+            
+            .card {
+                padding: 1.5rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Prediction Result</h1>
+        <div class="header">
+            <h1>🍷 Prediction Results</h1>
+        </div>
+
         {% if error %}
-            <p class="error">An error occurred: <strong>{{ error }}</strong></p>
-        {% elif image_with_box %}
-            <p>The model predicts: <strong>{{ prediction }}</strong> with <strong>{{ confidence }}</strong> confidence.</p>
-            <img src="data:image/jpeg;base64,{{ image_with_box }}" alt="Result Image">
+        <div class="error-card">
+            <h2>⚠️ Error</h2>
+            <p>{{ error }}</p>
+            <a href="/" class="back-btn" style="border: 2px solid white; color: white; margin-top: 2rem;">Try Again</a>
+        </div>
         {% else %}
-            <p>No result to display.</p>
+        <div class="card">
+            <div class="result-hero">
+                <div class="wine-bottle">🍾</div>
+                <div class="quality-score">{{ quality }}</div>
+                <div class="quality-label">{{ rating.label }}</div>
+                
+                <div class="stars-container">
+                    {% for i in range(3) %}
+                        {% if i < rating.stars %}
+                            <span class="star">★</span>
+                        {% else %}
+                            <span class="star empty">★</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                <div class="quality-bar-container">
+                    <div class="quality-indicator" style="left: {{ rating.percentage }}%;"></div>
+                </div>
+                <div class="quality-range">
+                    <span>Poor ({{ min_quality }})</span>
+                    <span>Excellent ({{ max_quality }})</span>
+                </div>
+            </div>
+
+            <h3 class="section-title">Wine Properties</h3>
+            <div class="features-grid">
+                <div class="feature-item">
+                    <div class="feature-label">Fixed Acidity</div>
+                    <div class="feature-value">{{ "%.2f"|format(features.fixed_acidity) }}</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-label">Volatile Acidity</div>
+                    <div class="feature-value">{{ "%.2f"|format(features.volatile_acidity) }}</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-label">Citric Acid</div>
+                    <div class="feature-value">{{ "%.2f"|format(features.citric_acid) }}</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-label">Residual Sugar</div>
+                    <div class="feature-value">{{ "%.2f"|format(features.residual_sugar) }}</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-label">Chlorides</div>
+                    <div class="feature-value">{{ "%.3f"|format(features.chlorides) }}</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-label">Free SO₂</div>
+                    <div class="feature-value">{{ "%.0f"|format(features.free_sulfur_dioxide) }}</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-label">Total SO₂</div>
+                    <div class="feature-value">{{ "%.0f"|format(features.total_sulfur_dioxide) }}</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-label">Density</div>
+                    <div class="feature-value">{{ "%.4f"|format(features.density) }}</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-label">pH Level</div>
+                    <div class="feature-value">{{ "%.2f"|format(features.pH) }}</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-label">Sulphates</div>
+                    <div class="feature-value">{{ "%.2f"|format(features.sulphates) }}</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-label">Alcohol</div>
+                    <div class="feature-value">{{ "%.1f"|format(features.alcohol) }}%</div>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="/" class="back-btn">← Predict Another Wine</a>
+            </div>
+        </div>
         {% endif %}
-        <br><br>
-        <a href="/">Try another one</a>
     </div>
 </body>
 </html>

@@ -1,164 +1,115 @@
-import kfp
 from kfp import dsl
-from kfp.dsl import Output, Artifact, OutputPath
+from kfp.dsl import Dataset, Input, Output, Model, Metrics, OutputPath
+
+# This is the base path in our Artifact Registry where the component images are stored.
+IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo"
 
 @dsl.container_component
-def auto_labeler(
-    raw_bucket_name: str,
-    processed_bucket_name: str,
-    processed_prefix: str,
-    labeled_dataset: Output[Artifact]
-):
+def data_ingestion_op(input_data_path: str, raw_dataset: Output[Dataset]):
+    # Defines the data ingestion step, which now reads from a local path.
     return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/auto-labeler:latest',
-        command=[
-            "python3", "component.py",
-            "--raw-bucket-name", raw_bucket_name,
-            "--processed-bucket-name", processed_bucket_name,
-            "--processed-prefix", processed_prefix,
+        image=f"{IMAGE_REGISTRY_PATH}/data-ingestion:latest",
+        command=["python3", "component.py"],
+        args=["--input-data-path", input_data_path, "--output-dataset-path", raw_dataset.path]
+    )
+
+@dsl.container_component
+def train_test_splitter_op(input_dataset: Input[Dataset], training_data: Output[Dataset], testing_data: Output[Dataset]):
+    # Defines the component that splits our data into training and testing sets.
+    return dsl.ContainerSpec(
+        image=f"{IMAGE_REGISTRY_PATH}/train-test-splitter:latest",
+        command=["python3", "component.py"],
+        args=["--input-dataset-path", input_dataset.path, "--training-data-path", training_data.path, "--testing-data-path", testing_data.path]
+    )
+
+@dsl.container_component
+def train_model_op(image_name: str, training_data: Input[Dataset], model_artifact: Output[Model]):
+    # This is a generic trainer; we can reuse it for any model just by changing the image name.
+    return dsl.ContainerSpec(
+        image=f"{IMAGE_REGISTRY_PATH}/{image_name}:latest",
+        command=["python3", "component.py"],
+        args=["--training_data_path", training_data.path, "--model_artifact_path", model_artifact.path]
+    )
+    
+@dsl.container_component
+def model_evaluator_op(
+    training_data: Input[Dataset],
+    testing_data: Input[Dataset],
+    random_forest_model: Input[Model],
+    xgboost_model: Input[Model],
+    svm_model: Input[Model],
+    model_bucket_name: str,
+    prod_model_blob: str,
+    decision: OutputPath(str),
+    best_model_uri: OutputPath(str),
+    metrics: Output[Metrics],
+):
+    # Defines our main evaluation component, which takes all models and data as input.
+    return dsl.ContainerSpec(
+        image=f"{IMAGE_REGISTRY_PATH}/model-evaluator:latest",
+        command=["python3", "component.py"],
+        args=[
+            "--training_data_path", training_data.path,
+            "--testing_data_path", testing_data.path,
+            "--random_forest_model_path", random_forest_model.path,
+            "--xgboost_model_path", xgboost_model.path,
+            "--svm_model_path", svm_model.path,
+            "--model_bucket_name", model_bucket_name,
+            "--prod_model_blob", prod_model_blob,
+            "--decision_path", decision,
+            "--best_model_uri_path", best_model_uri,
+            "--metrics_path", metrics.path,
         ]
     )
 
 @dsl.container_component
-def dataset_splitter(
-    bucket_name: str,
-    prefix: str,
-    data_yaml_artifact: Output[Artifact]
-):
+def trigger_cd_pipeline_op(project_id: str, trigger_id: str, new_model_uri: str):
+    # This component's only job is to start our CD pipeline if a new model is chosen.
     return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/dataset-splitter:latest',
-        command=[
-            "python3", "component.py",
-            "--bucket-name", bucket_name,
-            "--prefix", prefix,
-        ]
+        image=f"{IMAGE_REGISTRY_PATH}/trigger-cd:latest",
+        command=["python3", "component.py"],
+        args=["--project-id", project_id, "--trigger-id", trigger_id, "--new-model-uri", new_model_uri]
     )
 
-@dsl.container_component
-def yolo_trainer(
-    data_yaml_uri: str,
-    output_bucket_name: str,
-    output_blob_name: str,
-    model_artifact: Output[Artifact]
-):
-    return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/yolo-trainer:latest',
-        command=[
-            "python", "component.py",
-            "--data-yaml-uri", data_yaml_uri,
-            "--output-bucket-name", output_bucket_name,
-            "--output-blob-name", output_blob_name
-        ]
-    )
-
-@dsl.container_component
-def model_evaluator(
-    data_yaml_uri: str,
-    new_model_uri: str,
-    prod_model_uri: str,
-    decision: OutputPath(str)
-):
-    return dsl.ContainerSpec(
-        image='europe-west4-docker.pkg.dev/data-engineering-vm/ml-services/model-evaluator:latest',
-        command=[
-            "bash", "-c",
-            f"python component.py --data-yaml-uri {data_yaml_uri} --new-model-uri {new_model_uri} --prod-model-uri {prod_model_uri} > {decision}"
-        ]
-    )
-
-@dsl.container_component
-def trigger_cd_pipeline(
-    project_id: str,
-    trigger_id: str,
-    new_model_uri: str
-):
-    return dsl.ContainerSpec(
-        image='google/cloud-sdk:slim',
-        command=[
-            "bash", "-c",
-            f"""
-            set -e
-            ACCESS_TOKEN=$(gcloud auth print-access-token)
-            curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" \
-                 -H "Content-Type: application/json" \
-                 "https://cloudbuild.googleapis.com/v1/projects/{project_id}/triggers/{trigger_id}:run" \
-                 -d '{{"substitutions":{{"_NEW_MODEL_URI":"{new_model_uri}"}}}}'
-            """
-        ]
-    )
-
-@dsl.pipeline(
-    name='yolo-glasses-detection-pipeline',
-    description='End-to-end pipeline for training and deploying glasses detection model'
-)
-def object_detection_pipeline(
+@dsl.pipeline(name="wine-quality-git-triggered-pipeline")
+def wine_quality_pipeline(
+    # The default path to the data directory is now 'dataset'.
+    input_data_path: str = "dataset",
     project_id: str = "data-engineering-vm",
-    pipeline_root: str = "gs://glasses-temp/pipeline-root",
-    raw_bucket: str = "glasses-data",
-    processed_bucket: str = "glasses-data",
-    model_bucket: str = "glasses-model",
-    cd_trigger_id: str = "deploy-glasses-app"
+    model_bucket: str = "yannick-wine-models",
+    cd_trigger_id: str = "deploy-wine-app-trigger"
 ):
-    # Dynamic paths using pipeline context
-    processed_prefix = "labeled_data/run-{{$.pipeline_job_name}}"
-    new_model_blob = "candidate_models/{{$.pipeline_job_name}}/best.pt"
-
-    # Step 1: Auto-label the raw images
-    labeling_task = auto_labeler(
-        raw_bucket_name=raw_bucket,
-        processed_bucket_name=processed_bucket,
-        processed_prefix=processed_prefix
-    )
-
-    # Step 2: Split dataset into train/val/test
-    splitting_task = dataset_splitter(
-        bucket_name=processed_bucket,
-        prefix=processed_prefix
-    ).after(labeling_task)
-    
-    # Construct the data.yaml GCS path
-    data_yaml_gcs_uri = f"gs://{processed_bucket}/{processed_prefix}/data.yaml"
-
-    # Step 3: Train YOLOv8 model
-    training_task = yolo_trainer(
-        data_yaml_uri=data_yaml_gcs_uri,
-        output_bucket_name=model_bucket,
-        output_blob_name=new_model_blob
-    ).after(splitting_task)
-    
-    # Configure GPU for training task
-    training_task.set_gpu_limit(1)
-    training_task.set_accelerator_type('NVIDIA_TESLA_T4')
-    
-    # Construct the new model GCS path
-    new_model_gcs_uri = f"gs://{model_bucket}/{new_model_blob}"
-
-    # Step 4: Evaluate new model against production model
-    evaluation_task = model_evaluator(
-        data_yaml_uri=data_yaml_gcs_uri,
-        new_model_uri=new_model_gcs_uri,
-        prod_model_uri=f"gs://{model_bucket}/production_model/best.pt"
-    ).after(training_task)
-    
-    # Configure GPU for evaluation task
-    evaluation_task.set_gpu_limit(1)
-    evaluation_task.set_accelerator_type('NVIDIA_TESLA_T4')
-
-    # Step 5: Conditionally trigger CD pipeline if new model is better
-    with dsl.Condition(
-        evaluation_task.outputs['decision'] == "deploy",
-        name="deploy-new-model"
-    ):
-        trigger_cd_pipeline(
+    # This function defines the graph of our ML pipeline, connecting all the steps.
+    ingestion_task = data_ingestion_op(input_data_path=input_data_path)
+    split_task = train_test_splitter_op(input_dataset=ingestion_task.outputs["raw_dataset"])
+    # These three training tasks will all run in parallel to save time.
+    rf_task = train_model_op(image_name="model-trainer-rf", training_data=split_task.outputs["training_data"]).set_display_name("Train-Random-Forest")
+    xgb_task = train_model_op(image_name="model-trainer-xgb", training_data=split_task.outputs["training_data"]).set_display_name("Train-XGBoost")
+    svm_task = train_model_op(image_name="model-trainer-svm", training_data=split_task.outputs["training_data"]).set_display_name("Train-SVM")
+    # The evaluation step waits for all training jobs to finish before it starts.
+    eval_task = model_evaluator_op(
+        training_data=split_task.outputs["training_data"],
+        testing_data=split_task.outputs["testing_data"],
+        random_forest_model=rf_task.outputs["model_artifact"],
+        xgboost_model=xgb_task.outputs["model_artifact"],
+        svm_model=svm_task.outputs["model_artifact"],
+        model_bucket_name=model_bucket,
+        prod_model_blob="production_model/model.joblib",
+    ).set_caching_options(enable_caching=False)
+    # This 'If' block creates a conditional branch in our pipeline.
+    with dsl.If(eval_task.outputs["decision"] == "deploy_new", name="if-new-model-is-better"):
+        # This step will ONLY run if the evaluator decides to deploy a new model.
+        trigger_cd_pipeline_op(
             project_id=project_id,
             trigger_id=cd_trigger_id,
-            new_model_uri=new_model_gcs_uri
+            new_model_uri=eval_task.outputs["best_model_uri"],
         )
 
-if __name__ == '__main__':
-    from kfp.compiler import Compiler
-    Compiler().compile(
-        pipeline_func=object_detection_pipeline,
-        package_path='object_detection_pipeline.yaml'
+if __name__ == "__main__":
+    from kfp import compiler
+    # This command compiles our Python pipeline code into a YAML file that Vertex AI can execute.
+    compiler.Compiler().compile(
+        pipeline_func=wine_quality_pipeline,
+        package_path="wine_quality_pipeline_git_triggered.yaml"
     )
-    print("Pipeline compiled successfully to 'object_detection_pipeline.yaml'")
+    print("Pipeline has been compiled successfully to wine_quality_pipeline_git_triggered.yaml.")
