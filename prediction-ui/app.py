@@ -1,94 +1,127 @@
-from flask import Flask, render_template, request
-import requests
+from flask import Flask, request, jsonify
+import joblib
+import pandas as pd
 import os
-import google.auth
-import google.auth.transport.requests
-from google.oauth2 import id_token
+import json
+from google.cloud import storage
 import traceback
 
 app = Flask(__name__)
-PREDICTOR_API_URL = os.environ.get("PREDICTOR_API_URL")
-REQUIRED_FEATURES = [
-    "type",
-    "fixed_acidity",
-    "volatile_acidity",
-    "citric_acid",
-    "residual_sugar",
-    "chlorides",
-    "free_sulfur_dioxide",
-    "total_sulfur_dioxide",
-    "density",
-    "pH",
-    "sulphates",
-    "alcohol"
-]
-MIN_QUALITY_SCORE = 3
-MAX_QUALITY_SCORE = 9
+CONFIG_BUCKET = os.environ.get("CONFIG_BUCKET", "yannick-pipeline-root")
+CONFIG_BLOB = os.environ.get("CONFIG_BLOB", "config/model-config.json")
+FALLBACK_MODEL_URI = os.environ.get("FALLBACK_MODEL_URI", "gs://yannick-wine-models/production_model/model.joblib")
+LOCAL_MODEL_PATH = "/tmp/model.joblib"
+model = None
 
-def get_identity_token(audience):
+def get_production_model_uri():
     try:
-        print(f"Requesting identity token for audience: {audience}")
-        creds, project = google.auth.default()
-        auth_req = google.auth.transport.requests.Request()
-        token = id_token.fetch_id_token(auth_req, audience)
-        print("Successfully acquired identity token.")
-        return token
+        print(f"Fetching model config from gs://{CONFIG_BUCKET}/{CONFIG_BLOB}")
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(CONFIG_BUCKET)
+        blob = bucket.blob(CONFIG_BLOB)
+        if not blob.exists():
+            print(f"Config file does not exist. Using fallback URI: {FALLBACK_MODEL_URI}")
+            return FALLBACK_MODEL_URI
+        config_str = blob.download_as_text()
+        if not config_str or config_str.strip() == "":
+            print(f"Config file is empty. Using fallback URI: {FALLBACK_MODEL_URI}")
+            return FALLBACK_MODEL_URI
+        try:
+            config = json.loads(config_str)
+        except json.JSONDecodeError as e:
+            print(f"Config file contains invalid JSON: {e}")
+            print(f"Config content: {repr(config_str[:200])}")
+            print(f"Using fallback URI: {FALLBACK_MODEL_URI}")
+            return FALLBACK_MODEL_URI
+        model_uri = config.get("production_model_uri")
+        if not model_uri:
+            print(f"Config missing 'production_model_uri'. Using fallback: {FALLBACK_MODEL_URI}")
+            return FALLBACK_MODEL_URI
+        print(f"Production model URI from config: {model_uri}")
+        return model_uri
     except Exception as e:
-        print(f"Fatal Error: Failed to acquire identity token for service-to-service authentication.")
-        raise
+        print(f"Error fetching model config: {e}")
+        traceback.print_exc()
+        print(f"Falling back to: {FALLBACK_MODEL_URI}")
+        return FALLBACK_MODEL_URI
 
-def get_quality_rating(quality_score):
-    quality_score = int(quality_score)
-    if quality_score <= 4: stars, label = 0, "Poor Quality"
-    elif quality_score <= 6: stars, label = 1, "Average Quality"
-    elif quality_score == 7: stars, label = 2, "Good Quality"
-    else: stars, label = 3, "Excellent Quality"
-    percentage = ((quality_score - MIN_QUALITY_SCORE) / (MAX_QUALITY_SCORE - MIN_QUALITY_SCORE)) * 100
-    return {"stars": stars, "label": label, "percentage": max(0, min(100, percentage))}
+def download_model():
+    print("Attempting to download the production model.")
+    model_uri = get_production_model_uri()
+    if not model_uri:
+        print("Fatal Error: Could not determine production model URI.")
+        return False
+    if not model_uri.startswith("gs://"):
+        print(f"Invalid model URI: {model_uri}")
+        return False
+    path_parts = model_uri.replace("gs://", "").split("/", 1)
+    bucket_name = path_parts[0]
+    blob_path = path_parts[1]
+    print(f"Downloading from gs://{bucket_name}/{blob_path}")
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        if not blob.exists():
+            print(f"ERROR: Model does not exist at {model_uri}")
+            return False
+        blob.download_to_filename(LOCAL_MODEL_PATH)
+        print("Model download was successful.")
+        return True
+    except Exception as e:
+        print("A critical error occurred during model download.")
+        traceback.print_exc()
+        return False
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+def load_model():
+    global model
+    if os.path.exists(LOCAL_MODEL_PATH):
+        try:
+            print("Loading model from local file into memory.")
+            model = joblib.load(LOCAL_MODEL_PATH)
+            print("Model loaded successfully.")
+        except Exception as e:
+            print(f"An error occurred while loading the model file: {e}")
+            traceback.print_exc()
+            model = None
+    else:
+        print("Model file could not be found locally.")
+        model = None
+
+if download_model():
+    load_model()
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    if not PREDICTOR_API_URL:
-        return render_template("result.html", error="Server configuration error: The prediction API URL is not set.")
+    if model is None:
+        return jsonify({"error": "Model is not available. Please run the training pipeline first."}), 503
     try:
-        features = {}
-        for feature_name in REQUIRED_FEATURES:
-            value = request.form.get(feature_name)
-            if value is None:
-                return render_template("result.html", error=f"Missing required field: {feature_name}")
-            if feature_name == "type":
-                features[feature_name] = value
-            else:
-                try:
-                    features[feature_name] = float(value)
-                except ValueError:
-                    return render_template("result.html", error=f"Invalid value for {feature_name}. Must be a number.")
-        api_endpoint = f"{PREDICTOR_API_URL}/predict"
-        auth_token = get_identity_token(audience=PREDICTOR_API_URL)
-        headers = {"Authorization": f"Bearer {auth_token}", "Content-Type": "application/json"}
-        print(f"Sending prediction request to the API at {api_endpoint}.")
-        response = requests.post(api_endpoint, headers=headers, json=features, timeout=60)
-        print(f"API responded with status code: {response.status_code}.")
-        response.raise_for_status()
-        data = response.json()
-        if "error" in data:
-            return render_template("result.html", error=data["error"])
-        quality = data.get("prediction")
-        if quality is None:
-            return render_template("result.html", error=f"API gave an unexpected response: {data}")
-        rating_info = get_quality_rating(quality)
-        # We need to pass the minimum/maximum quality to the results page as well.
-        return render_template("result.html", quality=quality, features=features, rating=rating_info,
-                             min_quality=MIN_QUALITY_SCORE, max_quality=MAX_QUALITY_SCORE)
+        data = request.get_json()
+        print(f"Received prediction request with data: {data}")
+        features = ["type", "fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides", "free_sulfur_dioxide", "total_sulfur_dioxide", "density", "pH", "sulphates", "alcohol"]
+        input_df = pd.DataFrame([data], columns=features)
+        input_df["type"] = input_df["type"].apply(lambda x: 1 if x == "red" else 0)
+        print(f"Encoded input for model: {input_df.to_dict('records')}")
+        prediction_result = model.predict(input_df)
+        final_prediction = int(round(prediction_result[0]))
+        print(f"Model prediction result: {final_prediction}")
+        return jsonify({"prediction": final_prediction})
     except Exception as e:
-        error_msg = f"An unexpected error occurred: {e}"
-        print(error_msg)
+        print(f"An error occurred during prediction: {e}")
         traceback.print_exc()
-        return render_template("result.html", error=error_msg)
+        return jsonify({"error": "An internal error occurred during the prediction process."}), 400
+
+@app.route("/health", methods=["GET"])
+def health_check():
+    if model:
+        return jsonify({"status": "ok", "model": "loaded"}), 200
+    else:
+        print("Health check failed: model not loaded. Attempting to reload.")
+        if download_model():
+            load_model()
+            if model:
+                return jsonify({"status": "ok", "model": "reloaded"}), 200
+        return jsonify({"status": "error", "model": "not_loaded"}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
