@@ -48,13 +48,14 @@ steps:
     args:
       - "-c"
       - |
-        PREDICTOR_API_URL=$(gcloud run services describe prediction-api --region=europe-west4 --format='value(status.url)')
+        API_URL=$$(gcloud run services describe prediction-api --region=europe-west4 --format='value(status.url)')
+        echo "Prediction API URL: $$API_URL"
         gcloud run deploy prediction-ui \
           --image=europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/prediction-ui:latest \
           --region=europe-west4 \
           --platform=managed \
           --allow-unauthenticated \
-          --set-env-vars=PREDICTOR_API_URL=$PREDICTOR_API_URL \
+          --set-env-vars=PREDICTOR_API_URL=$$API_URL \
           --memory=512Mi \
           --timeout=60
     waitFor: ["DeployPredictionAPI"]
