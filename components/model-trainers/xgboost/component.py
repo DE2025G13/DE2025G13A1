@@ -8,8 +8,6 @@ def train_model(training_data_path: str, model_artifact_path: str):
     print("Starting XGBoost training process.")
     X_train = pd.read_csv(os.path.join(training_data_path, "x_train.csv"))
     y_train = pd.read_csv(os.path.join(training_data_path, "y_train.csv"))
-    # XGBoost needs class labels to be zero-indexed, so we shift our quality scores
-    y_train_mapped = y_train.iloc[:, 0] - y_train.iloc[:, 0].min()
     model = xgb.XGBClassifier(
         objective="multi:softmax",
         use_label_encoder=False,
