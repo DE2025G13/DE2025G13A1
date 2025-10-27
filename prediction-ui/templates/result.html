@@ -34,72 +34,99 @@
         color: var(--gray-900);
         font-size: 14px;
         line-height: 1.5;
-        min-height: 100vh;
-        padding: 1rem;
+        padding: 0 1rem;
+        padding-bottom: 3rem;
       }
-      .container {
-        max-width: 800px;
-        margin: 0 auto;
-      }
-      .header {
+      .page-header {
         background: white;
-        border: 1px solid var(--gray-200);
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        border-bottom: 1px solid var(--gray-200);
+        padding: 1.5rem 0;
+        margin: -1rem -1rem 2rem -1rem;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
       }
-      .header h1 {
+      .page-header .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 2rem;
+      }
+      .page-header h1 {
         font-size: 1.5rem;
         font-weight: 600;
+        margin: 0;
         color: var(--gray-900);
-        margin-bottom: 0.25rem;
       }
-      .card {
-        background: white;
-        border: 1px solid var(--gray-200);
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-      }
-      .result-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding-bottom: 1.5rem;
-        border-bottom: 1px solid var(--gray-200);
-        margin-bottom: 1.5rem;
-      }
-      .quality-score {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-      }
-      .quality-badge {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 80px;
-        height: 80px;
-        border-radius: 8px;
-        background: linear-gradient(135deg, var(--blue-600), var(--blue-500));
-        color: white;
-        font-size: 2.5rem;
-        font-weight: 700;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
-      }
-      .quality-info h2 {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: var(--gray-900);
-        margin-bottom: 0.25rem;
-      }
-      .quality-info p {
+      .page-header p {
         color: var(--gray-500);
+        margin: 0.25rem 0 0 0;
         font-size: 0.875rem;
       }
-      .quality-bar-container {
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 2rem;
+      }
+      .card {
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        background: white;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        margin-bottom: 1.5rem;
+      }
+      .card-header {
+        background: white;
+        border-bottom: 1px solid var(--gray-200);
+        padding: 1rem 1.25rem;
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: var(--gray-900);
+      }
+      .card-body {
+        padding: 1.5rem;
+      }
+      .metrics-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+      .metric-card {
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 0.875rem 1rem;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      .metric-card.primary {
+        background: linear-gradient(135deg, var(--blue-600), var(--blue-500));
+        border: none;
+        color: white;
+      }
+      .metric-card.primary .metric-label {
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .metric-card.primary .metric-value {
+        color: white;
+      }
+      .metric-card .metric-label {
+        color: var(--gray-500);
+        font-size: 0.6875rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+      }
+      .metric-card .metric-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        line-height: 1;
+      }
+      .quality-bar-section {
         margin-bottom: 1.5rem;
       }
       .quality-bar {
@@ -130,12 +157,18 @@
         color: var(--gray-500);
       }
       .section-header {
-        color: var(--gray-700);
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
         margin-bottom: 1rem;
+        border-bottom: 1px solid var(--gray-200);
+      }
+      .section-header h5 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--gray-900);
       }
       .properties-grid {
         display: grid;
@@ -145,10 +178,10 @@
       .property-card {
         background: var(--gray-50);
         border: 1px solid var(--gray-200);
-        border-radius: 6px;
-        padding: 0.875rem;
+        border-radius: 8px;
+        padding: 0.875rem 1rem;
       }
-      .property-label {
+      .property-card .metric-label {
         color: var(--gray-500);
         font-size: 0.6875rem;
         font-weight: 500;
@@ -156,10 +189,11 @@
         letter-spacing: 0.5px;
         margin-bottom: 0.5rem;
       }
-      .property-value {
+      .property-card .metric-value {
         font-size: 1.125rem;
         font-weight: 600;
         color: var(--gray-900);
+        line-height: 1;
       }
       .actions {
         display: flex;
@@ -167,7 +201,7 @@
       }
       .btn {
         flex: 1;
-        padding: 0.75rem;
+        padding: 0.75rem 1rem;
         background: var(--gray-100);
         color: var(--gray-700);
         text-decoration: none;
@@ -177,6 +211,7 @@
         text-align: center;
         transition: all 0.15s;
         border: 1px solid var(--gray-200);
+        display: inline-block;
       }
       .btn:hover {
         background: var(--gray-200);
@@ -185,7 +220,7 @@
       .error-card {
         background: #fef2f2;
         border: 1px solid #fecaca;
-        padding: 1.5rem;
+        padding: 2rem;
         text-align: center;
         border-radius: 8px;
       }
@@ -196,35 +231,30 @@
       }
       .error-card p {
         color: #991b1b;
-        margin-bottom: 1rem;
+        margin-bottom: 1.5rem;
       }
       @media (max-width: 768px) {
-        .properties-grid {
-          grid-template-columns: repeat(3, 1fr);
+        .metrics-row {
+          grid-template-columns: repeat(2, 1fr);
         }
-        .result-header {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 1rem;
-        }
-      }
-      @media (max-width: 640px) {
         .properties-grid {
           grid-template-columns: repeat(2, 1fr);
         }
-        .quality-badge {
-          width: 64px;
-          height: 64px;
-          font-size: 2rem;
+        .page-header .container,
+        .container {
+          padding: 0 1rem;
         }
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="header">
-        <h1>Prediction Result</h1>
+    <div class="page-header">
+      <div class="container">
+        <h1>Wine Quality Predictor</h1>
+        <p>Real-time wine quality prediction platform</p>
       </div>
+    </div>
+    <div class="container">
       {% if error %}
       <div class="card error-card">
         <h2>Error</h2>
@@ -232,96 +262,108 @@
         <a href="/" class="btn">Try Again</a>
       </div>
       {% else %}
+      <div class="metrics-row">
+        <div class="metric-card primary">
+          <div class="metric-label">Quality Score</div>
+          <div class="metric-value">{{ quality }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Rating</div>
+          <div class="metric-value" style="font-size: 1rem">
+            {{ rating.label }}
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Wine Type</div>
+          <div class="metric-value" style="font-size: 1rem">
+            {{ features.type|capitalize }}
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Alcohol %</div>
+          <div class="metric-value" style="font-size: 1.25rem">
+            {{ "%.1f"|format(features.alcohol) }}
+          </div>
+        </div>
+      </div>
       <div class="card">
-        <div class="result-header">
-          <div class="quality-score">
-            <div class="quality-badge">{{ quality }}</div>
-            <div class="quality-info">
-              <h2>{{ rating.label }}</h2>
-              <p>Quality Score</p>
+        <div class="card-header">Quality Analysis</div>
+        <div class="card-body">
+          <div class="quality-bar-section">
+            <div class="quality-bar">
+              <div
+                class="quality-bar-fill"
+                style="width:{{ rating.percentage }}%"
+              ></div>
+            </div>
+            <div class="quality-range">
+              <span>Poor ({{ min_quality }})</span>
+              <span>Excellent ({{ max_quality }})</span>
             </div>
           </div>
         </div>
-        <div class="quality-bar-container">
-          <div class="quality-bar">
-            <div
-              class="quality-bar-fill"
-              style="width:{{ rating.percentage }}%"
-            ></div>
-          </div>
-          <div class="quality-range">
-            <span>Poor ({{ min_quality }})</span>
-            <span>Excellent ({{ max_quality }})</span>
-          </div>
-        </div>
-        <div class="section-header">Wine Properties</div>
-        <div class="properties-grid">
-          <div class="property-card">
-            <div class="property-label">Type</div>
-            <div class="property-value">{{ features.type|capitalize }}</div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">Fixed Acidity</div>
-            <div class="property-value">
-              {{ "%.2f"|format(features.fixed_acidity) }}
+      </div>
+      <div class="card">
+        <div class="card-header">Wine Properties</div>
+        <div class="card-body">
+          <div class="properties-grid">
+            <div class="property-card">
+              <div class="metric-label">Fixed Acidity</div>
+              <div class="metric-value">
+                {{ "%.2f"|format(features.fixed_acidity) }}
+              </div>
             </div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">Volatile Acidity</div>
-            <div class="property-value">
-              {{ "%.2f"|format(features.volatile_acidity) }}
+            <div class="property-card">
+              <div class="metric-label">Volatile Acidity</div>
+              <div class="metric-value">
+                {{ "%.2f"|format(features.volatile_acidity) }}
+              </div>
             </div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">Citric Acid</div>
-            <div class="property-value">
-              {{ "%.2f"|format(features.citric_acid) }}
+            <div class="property-card">
+              <div class="metric-label">Citric Acid</div>
+              <div class="metric-value">
+                {{ "%.2f"|format(features.citric_acid) }}
+              </div>
             </div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">Residual Sugar</div>
-            <div class="property-value">
-              {{ "%.2f"|format(features.residual_sugar) }}
+            <div class="property-card">
+              <div class="metric-label">Residual Sugar</div>
+              <div class="metric-value">
+                {{ "%.2f"|format(features.residual_sugar) }}
+              </div>
             </div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">Chlorides</div>
-            <div class="property-value">
-              {{ "%.3f"|format(features.chlorides) }}
+            <div class="property-card">
+              <div class="metric-label">Chlorides</div>
+              <div class="metric-value">
+                {{ "%.3f"|format(features.chlorides) }}
+              </div>
             </div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">Free SO₂</div>
-            <div class="property-value">
-              {{ "%.0f"|format(features.free_sulfur_dioxide) }}
+            <div class="property-card">
+              <div class="metric-label">Free SO₂</div>
+              <div class="metric-value">
+                {{ "%.0f"|format(features.free_sulfur_dioxide) }}
+              </div>
             </div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">Total SO₂</div>
-            <div class="property-value">
-              {{ "%.0f"|format(features.total_sulfur_dioxide) }}
+            <div class="property-card">
+              <div class="metric-label">Total SO₂</div>
+              <div class="metric-value">
+                {{ "%.0f"|format(features.total_sulfur_dioxide) }}
+              </div>
             </div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">Density</div>
-            <div class="property-value">
-              {{ "%.4f"|format(features.density) }}
+            <div class="property-card">
+              <div class="metric-label">Density</div>
+              <div class="metric-value">
+                {{ "%.4f"|format(features.density) }}
+              </div>
             </div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">pH</div>
-            <div class="property-value">{{ "%.2f"|format(features.pH) }}</div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">Sulphates</div>
-            <div class="property-value">
-              {{ "%.2f"|format(features.sulphates) }}
+            <div class="property-card">
+              <div class="metric-label">pH</div>
+              <div class="metric-value">{{ "%.2f"|format(features.pH) }}</div>
             </div>
-          </div>
-          <div class="property-card">
-            <div class="property-label">Alcohol %</div>
-            <div class="property-value">
-              {{ "%.1f"|format(features.alcohol) }}
+            <div class="property-card">
+              <div class="metric-label">Sulphates</div>
+              <div class="metric-value">
+                {{ "%.2f"|format(features.sulphates) }}
+              </div>
             </div>
           </div>
         </div>
