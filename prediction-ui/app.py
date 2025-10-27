@@ -7,6 +7,7 @@ from google.oauth2 import id_token
 
 app = Flask(__name__)
 
+# ===== GLOBAL CONSTANTS =====
 # These define the expected range of wine quality scores
 MIN_QUALITY_SCORE = 3
 MAX_QUALITY_SCORE = 8
@@ -31,6 +32,21 @@ QUALITY_COLORS = {
 
 # Get the predictor API URL from environment
 PREDICTOR_API_URL = os.environ.get("PREDICTOR_API_URL")
+
+# Required features for the prediction API (in order)
+REQUIRED_FEATURES = [
+    'fixed_acidity',
+    'volatile_acidity',
+    'citric_acid',
+    'residual_sugar',
+    'chlorides',
+    'free_sulfur_dioxide',
+    'total_sulfur_dioxide',
+    'density',
+    'pH',
+    'sulphates',
+    'alcohol'
+]
 
 def get_identity_token(audience):
     """
@@ -106,9 +122,17 @@ def predict():
         return render_template('result.html', error="Predictor API URL not configured on the server.")
 
     try:
-        # Extract features from form
-        form_data = request.form.to_dict()
-        features = {key: float(value) for key, value in form_data.items()}
+        # Extract only the required features from form in the correct format
+        features = {}
+        for feature_name in REQUIRED_FEATURES:
+            if feature_name not in request.form:
+                return render_template('result.html', 
+                                     error=f"Missing required field: {feature_name}")
+            try:
+                features[feature_name] = float(request.form[feature_name])
+            except ValueError:
+                return render_template('result.html', 
+                                     error=f"Invalid value for {feature_name}. Must be a number.")
         
         api_endpoint = f"{PREDICTOR_API_URL}/predict"
         
@@ -121,8 +145,13 @@ def predict():
             "Content-Type": "application/json"
         }
 
-        print(f"Sending authenticated request to {api_endpoint} with payload: {features}")
+        print(f"Sending authenticated request to {api_endpoint}")
+        print(f"Payload: {features}")
+        
         response = requests.post(api_endpoint, headers=headers, json=features, timeout=10)
+        
+        print(f"Response status: {response.status_code}")
+        print(f"Response body: {response.text}")
         
         # This will raise an exception for 4xx or 5xx status codes
         response.raise_for_status() 
@@ -137,7 +166,8 @@ def predict():
         quality = data.get('prediction') or data.get('quality')
         
         if quality is None:
-            return render_template('result.html', error="Invalid response from prediction API.")
+            return render_template('result.html', 
+                                 error=f"Invalid response from prediction API. Response: {data}")
         
         # Get rating information
         rating_info = get_quality_rating(quality)
@@ -150,12 +180,19 @@ def predict():
                              max_quality=MAX_QUALITY_SCORE)
 
     except requests.exceptions.RequestException as e:
-        # The response.raise_for_status() will likely trigger this for 403 errors
-        return render_template('result.html', error=f"Could not connect to the prediction API: {e}")
+        error_msg = f"Could not connect to the prediction API: {e}"
+        print(f"Request error: {error_msg}")
+        return render_template('result.html', error=error_msg)
     except ValueError as e:
-        return render_template('result.html', error=f"Invalid input. Please ensure all fields are numbers: {e}")
+        error_msg = f"Invalid input: {e}"
+        print(f"Value error: {error_msg}")
+        return render_template('result.html', error=error_msg)
     except Exception as e:
-        return render_template('result.html', error=f"An unexpected error occurred: {e}")
+        error_msg = f"An unexpected error occurred: {e}"
+        print(f"Unexpected error: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        return render_template('result.html', error=error_msg)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=True)
