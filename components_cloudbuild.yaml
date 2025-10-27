@@ -44,7 +44,7 @@ steps:
     args:
       - "-c"
       - |
-        gcloud ai pipelines run \
+        gcloud beta ai pipelines run \
           --project=${PROJECT_ID} \
           --region=europe-west4 \
           --template-path=wine_quality_pipeline_git_triggered.yaml \
