@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wine Quality Predictor</title>
+    <title>Prediction Result</title>
     <style>
       :root {
         --gray-50: #fafafa;
@@ -26,6 +26,9 @@
         --purple-100: #f3e8ff;
         --purple-500: #a855f7;
         --purple-600: #9333ea;
+        --amber-500: #f59e0b;
+        --emerald-500: #10b981;
+        --rose-500: #f43f5e;
       }
       * {
         box-sizing: border-box;
@@ -86,6 +89,7 @@
         border-radius: 8px;
         background: white;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        margin-bottom: 1.5rem;
       }
       .card-header {
         background: white;
@@ -98,17 +102,34 @@
       .card-body {
         padding: 1.5rem;
       }
-      .form-grid {
+      .metrics-row {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 1.25rem;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
       }
-      .form-group {
+      .metric-card {
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 0.875rem 1rem;
         display: flex;
         flex-direction: column;
-        position: relative;
+        height: 100%;
       }
-      .form-group label {
+      .metric-card.primary {
+        background: linear-gradient(135deg, var(--wine-600), var(--wine-700));
+        border: none;
+        color: white;
+        box-shadow: 0 4px 12px rgba(159, 18, 57, 0.25);
+      }
+      .metric-card.primary .metric-label {
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .metric-card.primary .metric-value {
+        color: white;
+      }
+      .metric-card .metric-label {
         color: var(--gray-500);
         font-size: 0.6875rem;
         font-weight: 500;
@@ -116,65 +137,125 @@
         letter-spacing: 0.5px;
         margin-bottom: 0.5rem;
       }
-      .form-group input,
-      .form-group select {
-        width: 100%;
-        padding: 0.625rem 0.875rem;
-        border: 1px solid var(--gray-300);
-        border-radius: 6px;
-        font-size: 0.875rem;
+      .metric-card .metric-value {
+        font-size: 1.5rem;
+        font-weight: 700;
         color: var(--gray-900);
-        background: white;
-        transition: all 0.15s;
-        appearance: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
+        line-height: 1;
       }
-      .form-group select {
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 0.75rem center;
-        padding-right: 2.5rem;
+      .quality-bar-section {
+        margin-bottom: 1.5rem;
       }
-      .form-group input:focus,
-      .form-group select:focus {
-        outline: none;
-        border-color: var(--wine-500);
-        box-shadow: 0 0 0 3px rgba(190, 18, 60, 0.1);
+      .quality-bar {
+        width: 100%;
+        height: 8px;
+        background: var(--gray-200);
+        border-radius: 4px;
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 0.5rem;
       }
-      .form-group input:hover:not(:focus),
-      .form-group select:hover:not(:focus) {
-        border-color: var(--gray-400);
+      .quality-bar-fill {
+        height: 100%;
+        background: linear-gradient(
+          to right,
+          var(--rose-500),
+          var(--amber-500),
+          var(--emerald-500),
+          var(--wine-600)
+        );
+        border-radius: 4px;
       }
-      .form-actions {
-        margin-top: 1.5rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--gray-200);
+      .quality-range {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75rem;
+        color: var(--gray-500);
+      }
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid var(--gray-200);
+      }
+      .section-header h5 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--gray-900);
+      }
+      .properties-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+      }
+      .property-card {
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 0.875rem 1rem;
+      }
+      .property-card .metric-label {
+        color: var(--gray-500);
+        font-size: 0.6875rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+      }
+      .property-card .metric-value {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--gray-900);
+        line-height: 1;
+      }
+      .actions {
+        display: flex;
+        gap: 0.75rem;
       }
       .btn {
-        width: 100%;
+        flex: 1;
         padding: 0.75rem 1rem;
-        background: linear-gradient(135deg, var(--wine-600), var(--wine-700));
-        color: white;
-        border: none;
+        background: var(--gray-100);
+        color: var(--gray-700);
+        text-decoration: none;
         border-radius: 6px;
         font-size: 0.875rem;
         font-weight: 500;
-        cursor: pointer;
-        transition: all 0.15s;
-        box-shadow: 0 1px 3px rgba(159, 18, 57, 0.2);
+        text-align: center;
+        border: 1px solid var(--gray-200);
+        display: inline-block;
       }
       .btn:hover {
-        background: linear-gradient(135deg, var(--wine-500), var(--wine-600));
-        box-shadow: 0 4px 12px rgba(159, 18, 57, 0.3);
-        transform: translateY(-1px);
+        background: linear-gradient(135deg, var(--wine-600), var(--wine-700));
+        color: white;
+        border-color: var(--wine-600);
+        box-shadow: 0 4px 12px rgba(159, 18, 57, 0.25);
       }
-      .btn:active {
-        transform: translateY(0);
+      .error-card {
+        background: linear-gradient(135deg, #fef2f2, #fce7f3);
+        border: 1px solid #fecaca;
+        padding: 2rem;
+        text-align: center;
+        border-radius: 8px;
+      }
+      .error-card h2 {
+        color: #dc2626;
+        font-size: 1.25rem;
+        margin-bottom: 0.5rem;
+      }
+      .error-card p {
+        color: #991b1b;
+        margin-bottom: 1.5rem;
       }
       @media (max-width: 768px) {
-        .form-grid {
-          grid-template-columns: 1fr;
+        .metrics-row {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .properties-grid {
+          grid-template-columns: repeat(2, 1fr);
         }
         .page-header .container,
         .container {
@@ -191,146 +272,123 @@
       </div>
     </div>
     <div class="container">
-      <div class="card">
-        <div class="card-header">Wine Characteristics</div>
-        <div class="card-body">
-          <form action="/predict" method="POST">
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="type">Wine Type</label>
-                <select name="type" id="type" required>
-                  <option value="white">White</option>
-                  <option value="red">Red</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="fixed_acidity">Fixed Acidity</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  name="fixed_acidity"
-                  id="fixed_acidity"
-                  required
-                  value="7.4"
-                />
-              </div>
-              <div class="form-group">
-                <label for="volatile_acidity">Volatile Acidity</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="volatile_acidity"
-                  id="volatile_acidity"
-                  required
-                  value="0.70"
-                />
-              </div>
-              <div class="form-group">
-                <label for="citric_acid">Citric Acid</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="citric_acid"
-                  id="citric_acid"
-                  required
-                  value="0.00"
-                />
-              </div>
-              <div class="form-group">
-                <label for="residual_sugar">Residual Sugar</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  name="residual_sugar"
-                  id="residual_sugar"
-                  required
-                  value="1.9"
-                />
-              </div>
-              <div class="form-group">
-                <label for="chlorides">Chlorides</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  name="chlorides"
-                  id="chlorides"
-                  required
-                  value="0.076"
-                />
-              </div>
-              <div class="form-group">
-                <label for="free_sulfur_dioxide">Free Sulfur Dioxide</label>
-                <input
-                  type="number"
-                  step="1"
-                  name="free_sulfur_dioxide"
-                  id="free_sulfur_dioxide"
-                  required
-                  value="11"
-                />
-              </div>
-              <div class="form-group">
-                <label for="total_sulfur_dioxide">Total Sulfur Dioxide</label>
-                <input
-                  type="number"
-                  step="1"
-                  name="total_sulfur_dioxide"
-                  id="total_sulfur_dioxide"
-                  required
-                  value="34"
-                />
-              </div>
-              <div class="form-group">
-                <label for="density">Density</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  name="density"
-                  id="density"
-                  required
-                  value="0.9978"
-                />
-              </div>
-              <div class="form-group">
-                <label for="pH">pH Level</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="pH"
-                  id="pH"
-                  required
-                  value="3.51"
-                />
-              </div>
-              <div class="form-group">
-                <label for="sulphates">Sulphates</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="sulphates"
-                  id="sulphates"
-                  required
-                  value="0.56"
-                />
-              </div>
-              <div class="form-group">
-                <label for="alcohol">Alcohol %</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  name="alcohol"
-                  id="alcohol"
-                  required
-                  value="9.4"
-                />
-              </div>
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn">Predict Quality</button>
-            </div>
-          </form>
+      {% if error %}
+      <div class="card error-card">
+        <h2>Error</h2>
+        <p>{{ error }}</p>
+        <a href="/" class="btn">Try Again</a>
+      </div>
+      {% else %}
+      <div class="metrics-row">
+        <div class="metric-card primary">
+          <div class="metric-label">Quality Score</div>
+          <div class="metric-value">{{ quality }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Rating</div>
+          <div class="metric-value" style="font-size: 1rem">
+            {{ rating.label }}
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Wine Type</div>
+          <div class="metric-value" style="font-size: 1rem">
+            {{ features.type|capitalize }}
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Alcohol %</div>
+          <div class="metric-value" style="font-size: 1.25rem">
+            {{ "%.1f"|format(features.alcohol) }}
+          </div>
         </div>
       </div>
+      <div class="card">
+        <div class="card-header">Quality Analysis</div>
+        <div class="card-body">
+          <div class="quality-bar-section">
+            <div class="quality-bar">
+              <div
+                class="quality-bar-fill"
+                style="width:{{ rating.percentage }}%"
+              ></div>
+            </div>
+            <div class="quality-range">
+              <span>Poor ({{ min_quality }})</span>
+              <span>Excellent ({{ max_quality }})</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">Wine Properties</div>
+        <div class="card-body">
+          <div class="properties-grid">
+            <div class="property-card">
+              <div class="metric-label">Fixed Acidity</div>
+              <div class="metric-value">
+                {{ "%.2f"|format(features.fixed_acidity) }}
+              </div>
+            </div>
+            <div class="property-card">
+              <div class="metric-label">Volatile Acidity</div>
+              <div class="metric-value">
+                {{ "%.2f"|format(features.volatile_acidity) }}
+              </div>
+            </div>
+            <div class="property-card">
+              <div class="metric-label">Citric Acid</div>
+              <div class="metric-value">
+                {{ "%.2f"|format(features.citric_acid) }}
+              </div>
+            </div>
+            <div class="property-card">
+              <div class="metric-label">Residual Sugar</div>
+              <div class="metric-value">
+                {{ "%.2f"|format(features.residual_sugar) }}
+              </div>
+            </div>
+            <div class="property-card">
+              <div class="metric-label">Chlorides</div>
+              <div class="metric-value">
+                {{ "%.3f"|format(features.chlorides) }}
+              </div>
+            </div>
+            <div class="property-card">
+              <div class="metric-label">Free Sulfur Dioxide</div>
+              <div class="metric-value">
+                {{ "%.0f"|format(features.free_sulfur_dioxide) }}
+              </div>
+            </div>
+            <div class="property-card">
+              <div class="metric-label">Total Sulfur Dioxide</div>
+              <div class="metric-value">
+                {{ "%.0f"|format(features.total_sulfur_dioxide) }}
+              </div>
+            </div>
+            <div class="property-card">
+              <div class="metric-label">Density</div>
+              <div class="metric-value">
+                {{ "%.4f"|format(features.density) }}
+              </div>
+            </div>
+            <div class="property-card">
+              <div class="metric-label">pH</div>
+              <div class="metric-value">{{ "%.2f"|format(features.pH) }}</div>
+            </div>
+            <div class="property-card">
+              <div class="metric-label">Sulphates</div>
+              <div class="metric-value">
+                {{ "%.2f"|format(features.sulphates) }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <a href="/" class="btn">New Prediction</a>
+      </div>
+      {% endif %}
     </div>
   </body>
 </html>
