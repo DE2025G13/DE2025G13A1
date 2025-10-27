@@ -1,15 +1,7 @@
-# Use a slim Python base image
 FROM python:3.9-slim
-
-# Set the working directory in the container
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-
-# Copy and install requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the component script
 COPY component.py .
-
-# Define the entrypoint for the container
 ENTRYPOINT ["python3", "component.py"]

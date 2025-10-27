@@ -5,12 +5,16 @@ from kfp.dsl import Dataset, Input, Output, Model, Metrics, OutputPath
 IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo"
 
 @dsl.container_component
-def data_ingestion_op(input_data_path: str, raw_dataset: Output[Dataset]):
-    # Defines the data ingestion step, which now reads from a local path.
+def data_ingestion_op(github_repo_url: str, github_branch: str, raw_dataset: Output[Dataset]):
+    # Defines the data ingestion step, which now clones from GitHub.
     return dsl.ContainerSpec(
         image=f"{IMAGE_REGISTRY_PATH}/data-ingestion:latest",
         command=["python3", "component.py"],
-        args=["--input-data-path", input_data_path, "--output-dataset-path", raw_dataset.path]
+        args=[
+            "--github-repo-url", github_repo_url,
+            "--github-branch", github_branch,
+            "--output-dataset-path", raw_dataset.path
+        ]
     )
 
 @dsl.container_component
@@ -73,14 +77,18 @@ def trigger_cd_pipeline_op(project_id: str, trigger_id: str, new_model_uri: str)
 
 @dsl.pipeline(name="wine-quality-git-triggered-pipeline")
 def wine_quality_pipeline(
-    # The default path to the data directory is now 'dataset'.
-    input_data_path: str = "dataset",
+    # GitHub repository configuration
+    github_repo_url: str = "https://github.com/YOUR_USERNAME/YOUR_REPO.git",
+    github_branch: str = "dataset",
     project_id: str = "data-engineering-vm",
     model_bucket: str = "yannick-wine-models",
     cd_trigger_id: str = "deploy-wine-app-trigger"
 ):
     # This function defines the graph of our ML pipeline, connecting all the steps.
-    ingestion_task = data_ingestion_op(input_data_path=input_data_path)
+    ingestion_task = data_ingestion_op(
+        github_repo_url=github_repo_url,
+        github_branch=github_branch
+    )
     split_task = train_test_splitter_op(input_dataset=ingestion_task.outputs["raw_dataset"])
     # These three training tasks will all run in parallel to save time.
     rf_task = train_model_op(image_name="model-trainer-rf", training_data=split_task.outputs["training_data"]).set_display_name("Train-Random-Forest")
@@ -98,18 +106,13 @@ def wine_quality_pipeline(
     ).set_caching_options(enable_caching=False)
     # This 'If' block creates a conditional branch in our pipeline.
     with dsl.If(eval_task.outputs["decision"] == "deploy_new", name="if-new-model-is-better"):
-        # This step will ONLY run if the evaluator decides to deploy a new model.
         trigger_cd_pipeline_op(
             project_id=project_id,
             trigger_id=cd_trigger_id,
-            new_model_uri=eval_task.outputs["best_model_uri"],
+            new_model_uri=eval_task.outputs["best_model_uri"]
         )
 
 if __name__ == "__main__":
     from kfp import compiler
-    # This command compiles our Python pipeline code into a YAML file that Vertex AI can execute.
-    compiler.Compiler().compile(
-        pipeline_func=wine_quality_pipeline,
-        package_path="wine_quality_pipeline_git_triggered.yaml"
-    )
+    compiler.Compiler().compile(wine_quality_pipeline, "wine_quality_pipeline_git_triggered.yaml")
     print("Pipeline has been compiled successfully to wine_quality_pipeline_git_triggered.yaml.")
