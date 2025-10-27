@@ -5,153 +5,189 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Prediction Result</title>
     <style>
+      :root {
+        --gray-50: #fafafa;
+        --gray-100: #f4f4f5;
+        --gray-200: #e4e4e7;
+        --gray-300: #d4d4d8;
+        --gray-400: #a1a1aa;
+        --gray-500: #71717a;
+        --gray-600: #52525b;
+        --gray-700: #3f3f46;
+        --gray-800: #27272a;
+        --gray-900: #18181b;
+        --blue-500: #3b82f6;
+        --blue-600: #2563eb;
+        --green-500: #10b981;
+        --red-500: #ef4444;
+        --orange-500: #f97316;
+      }
       * {
+        box-sizing: border-box;
         margin: 0;
         padding: 0;
-        box-sizing: border-box;
       }
       body {
+        background: var(--gray-50);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
-        background: #f8fafc;
-        color: #0f172a;
+        color: var(--gray-900);
+        font-size: 14px;
+        line-height: 1.5;
         min-height: 100vh;
-        padding: 2rem 1rem;
+        padding: 1rem;
       }
       .container {
-        width: 100%;
-        max-width: 720px;
+        max-width: 800px;
         margin: 0 auto;
       }
-      .card {
-        background: white;
-        border-radius: 12px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        overflow: hidden;
-      }
       .header {
-        padding: 2rem 2rem 1.5rem;
-        text-align: center;
-        border-bottom: 1px solid #e2e8f0;
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
       }
       .header h1 {
         font-size: 1.5rem;
-        font-weight: 700;
-        color: #0f172a;
-        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: var(--gray-900);
+        margin-bottom: 0.25rem;
       }
-      .result-section {
-        padding: 2rem;
-        text-align: center;
+      .card {
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+      .result-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--gray-200);
+        margin-bottom: 1.5rem;
+      }
+      .quality-score {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
       }
       .quality-badge {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         justify-content: center;
-        width: 120px;
-        height: 120px;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        width: 80px;
+        height: 80px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--blue-600), var(--blue-500));
         color: white;
-        font-size: 3.5rem;
-        font-weight: 800;
-        margin-bottom: 1rem;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        font-size: 2.5rem;
+        font-weight: 700;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
       }
-      .quality-label {
+      .quality-info h2 {
         font-size: 1.25rem;
         font-weight: 600;
-        color: #334155;
-        margin-bottom: 1rem;
+        color: var(--gray-900);
+        margin-bottom: 0.25rem;
+      }
+      .quality-info p {
+        color: var(--gray-500);
+        font-size: 0.875rem;
+      }
+      .quality-bar-container {
+        margin-bottom: 1.5rem;
       }
       .quality-bar {
         width: 100%;
-        height: 8px;
-        background: #e2e8f0;
-        border-radius: 4px;
+        height: 6px;
+        background: var(--gray-200);
+        border-radius: 3px;
         position: relative;
         overflow: hidden;
-        margin: 2rem 0 0.5rem;
+        margin-bottom: 0.5rem;
       }
       .quality-bar-fill {
         height: 100%;
         background: linear-gradient(
           to right,
-          #ef4444,
-          #f59e0b,
-          #10b981,
-          #3b82f6
+          var(--red-500),
+          var(--orange-500),
+          var(--green-500),
+          var(--blue-500)
         );
-        border-radius: 4px;
+        border-radius: 3px;
         transition: width 0.6s ease;
       }
       .quality-range {
         display: flex;
         justify-content: space-between;
         font-size: 0.75rem;
-        color: #64748b;
-        margin-bottom: 2rem;
+        color: var(--gray-500);
       }
-      .properties {
-        padding: 0 2rem 2rem;
-      }
-      .properties h2 {
-        font-size: 0.875rem;
+      .section-header {
+        color: var(--gray-700);
+        font-size: 0.75rem;
         font-weight: 600;
-        color: #0f172a;
-        margin-bottom: 1rem;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.5px;
+        margin-bottom: 1rem;
       }
       .properties-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 1rem;
       }
-      .property-item {
-        padding: 1rem;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
+      .property-card {
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 6px;
+        padding: 0.875rem;
       }
       .property-label {
-        font-size: 0.75rem;
-        color: #64748b;
-        margin-bottom: 0.25rem;
+        color: var(--gray-500);
+        font-size: 0.6875rem;
+        font-weight: 500;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
       }
       .property-value {
-        font-size: 1rem;
+        font-size: 1.125rem;
         font-weight: 600;
-        color: #0f172a;
+        color: var(--gray-900);
       }
       .actions {
-        padding: 0 2rem 2rem;
+        display: flex;
+        gap: 0.75rem;
       }
       .btn {
-        display: inline-block;
-        padding: 0.75rem 1.5rem;
-        background: #f1f5f9;
-        color: #475569;
+        flex: 1;
+        padding: 0.75rem;
+        background: var(--gray-100);
+        color: var(--gray-700);
         text-decoration: none;
         border-radius: 6px;
         font-size: 0.875rem;
         font-weight: 500;
+        text-align: center;
         transition: all 0.15s;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--gray-200);
       }
       .btn:hover {
-        background: #e2e8f0;
-        border-color: #cbd5e1;
+        background: var(--gray-200);
+        border-color: var(--gray-300);
       }
       .error-card {
         background: #fef2f2;
         border: 1px solid #fecaca;
-        padding: 2rem;
+        padding: 1.5rem;
         text-align: center;
-        border-radius: 12px;
+        border-radius: 8px;
       }
       .error-card h2 {
         color: #dc2626;
@@ -160,22 +196,35 @@
       }
       .error-card p {
         color: #991b1b;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
+      }
+      @media (max-width: 768px) {
+        .properties-grid {
+          grid-template-columns: repeat(3, 1fr);
+        }
+        .result-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 1rem;
+        }
       }
       @media (max-width: 640px) {
         .properties-grid {
           grid-template-columns: repeat(2, 1fr);
         }
         .quality-badge {
-          width: 100px;
-          height: 100px;
-          font-size: 3rem;
+          width: 64px;
+          height: 64px;
+          font-size: 2rem;
         }
       }
     </style>
   </head>
   <body>
     <div class="container">
+      <div class="header">
+        <h1>Prediction Result</h1>
+      </div>
       {% if error %}
       <div class="card error-card">
         <h2>Error</h2>
@@ -184,12 +233,16 @@
       </div>
       {% else %}
       <div class="card">
-        <div class="header">
-          <h1>Prediction Result</h1>
+        <div class="result-header">
+          <div class="quality-score">
+            <div class="quality-badge">{{ quality }}</div>
+            <div class="quality-info">
+              <h2>{{ rating.label }}</h2>
+              <p>Quality Score</p>
+            </div>
+          </div>
         </div>
-        <div class="result-section">
-          <div class="quality-badge">{{ quality }}</div>
-          <div class="quality-label">{{ rating.label }}</div>
+        <div class="quality-bar-container">
           <div class="quality-bar">
             <div
               class="quality-bar-fill"
@@ -201,82 +254,80 @@
             <span>Excellent ({{ max_quality }})</span>
           </div>
         </div>
-        <div class="properties">
-          <h2>Wine Properties</h2>
-          <div class="properties-grid">
-            <div class="property-item">
-              <div class="property-label">Type</div>
-              <div class="property-value">{{ features.type|capitalize }}</div>
+        <div class="section-header">Wine Properties</div>
+        <div class="properties-grid">
+          <div class="property-card">
+            <div class="property-label">Type</div>
+            <div class="property-value">{{ features.type|capitalize }}</div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">Fixed Acidity</div>
+            <div class="property-value">
+              {{ "%.2f"|format(features.fixed_acidity) }}
             </div>
-            <div class="property-item">
-              <div class="property-label">Fixed Acidity</div>
-              <div class="property-value">
-                {{ "%.2f"|format(features.fixed_acidity) }}
-              </div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">Volatile Acidity</div>
+            <div class="property-value">
+              {{ "%.2f"|format(features.volatile_acidity) }}
             </div>
-            <div class="property-item">
-              <div class="property-label">Volatile Acidity</div>
-              <div class="property-value">
-                {{ "%.2f"|format(features.volatile_acidity) }}
-              </div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">Citric Acid</div>
+            <div class="property-value">
+              {{ "%.2f"|format(features.citric_acid) }}
             </div>
-            <div class="property-item">
-              <div class="property-label">Citric Acid</div>
-              <div class="property-value">
-                {{ "%.2f"|format(features.citric_acid) }}
-              </div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">Residual Sugar</div>
+            <div class="property-value">
+              {{ "%.2f"|format(features.residual_sugar) }}
             </div>
-            <div class="property-item">
-              <div class="property-label">Residual Sugar</div>
-              <div class="property-value">
-                {{ "%.2f"|format(features.residual_sugar) }}
-              </div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">Chlorides</div>
+            <div class="property-value">
+              {{ "%.3f"|format(features.chlorides) }}
             </div>
-            <div class="property-item">
-              <div class="property-label">Chlorides</div>
-              <div class="property-value">
-                {{ "%.3f"|format(features.chlorides) }}
-              </div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">Free SO₂</div>
+            <div class="property-value">
+              {{ "%.0f"|format(features.free_sulfur_dioxide) }}
             </div>
-            <div class="property-item">
-              <div class="property-label">Free SO₂</div>
-              <div class="property-value">
-                {{ "%.0f"|format(features.free_sulfur_dioxide) }}
-              </div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">Total SO₂</div>
+            <div class="property-value">
+              {{ "%.0f"|format(features.total_sulfur_dioxide) }}
             </div>
-            <div class="property-item">
-              <div class="property-label">Total SO₂</div>
-              <div class="property-value">
-                {{ "%.0f"|format(features.total_sulfur_dioxide) }}
-              </div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">Density</div>
+            <div class="property-value">
+              {{ "%.4f"|format(features.density) }}
             </div>
-            <div class="property-item">
-              <div class="property-label">Density</div>
-              <div class="property-value">
-                {{ "%.4f"|format(features.density) }}
-              </div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">pH</div>
+            <div class="property-value">{{ "%.2f"|format(features.pH) }}</div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">Sulphates</div>
+            <div class="property-value">
+              {{ "%.2f"|format(features.sulphates) }}
             </div>
-            <div class="property-item">
-              <div class="property-label">pH</div>
-              <div class="property-value">{{ "%.2f"|format(features.pH) }}</div>
-            </div>
-            <div class="property-item">
-              <div class="property-label">Sulphates</div>
-              <div class="property-value">
-                {{ "%.2f"|format(features.sulphates) }}
-              </div>
-            </div>
-            <div class="property-item">
-              <div class="property-label">Alcohol %</div>
-              <div class="property-value">
-                {{ "%.1f"|format(features.alcohol) }}
-              </div>
+          </div>
+          <div class="property-card">
+            <div class="property-label">Alcohol %</div>
+            <div class="property-value">
+              {{ "%.1f"|format(features.alcohol) }}
             </div>
           </div>
         </div>
-        <div class="actions">
-          <a href="/" class="btn">New Prediction</a>
-        </div>
+      </div>
+      <div class="actions">
+        <a href="/" class="btn">New Prediction</a>
       </div>
       {% endif %}
     </div>
