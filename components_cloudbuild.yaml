@@ -1,10 +1,19 @@
 options:
   logging: CLOUD_LOGGING_ONLY
 steps:
+  - name: "gcr.io/cloud-builders/git"
+    id: "FetchDataset"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        git fetch origin dataset
+        git checkout origin/dataset -- wine.csv
+        ls -la wine.csv
   - name: "gcr.io/cloud-builders/gsutil"
     id: "UploadDataset"
     args: ["cp", "wine.csv", "gs://yannick-pipeline-root/datasets/wine-${SHORT_SHA}.csv"]
-    dir: "."
+    waitFor: ["FetchDataset"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildDataIngestion"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest", "."]

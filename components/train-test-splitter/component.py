@@ -4,17 +4,16 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 def split_data(input_dataset_path: str, training_data_path: str, testing_data_path: str):
-    input_file = os.path.join(input_dataset_path, "data.csv")
+    input_file = os.path.join(input_dataset_path, "wine.csv")
     print(f"Loading data from {input_file} to split.")
     df = pd.read_csv(input_file)
-    if "Id" in df.columns:
-        print("Found and removed the 'Id' column.")
-        df.drop(columns="Id", inplace=True)
     print("Separating features (X) from the target (y).")
     X = df.drop(columns=["quality"])
     y = df["quality"]
     print("Performing an 80/20 train-test split.")
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
     os.makedirs(training_data_path, exist_ok=True)
     os.makedirs(testing_data_path, exist_ok=True)
     print("Saving split datasets to output paths.")
