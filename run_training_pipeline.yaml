@@ -1,6 +1,4 @@
-# This file's only job is to compile and start a Vertex AI pipeline run.
 steps:
-  # Step 1: Use a python container for all python-related tasks.
   - name: "python:3.9-slim"
     id: "CompilePipeline"
     entrypoint: "bash"
@@ -9,17 +7,12 @@ steps:
       - |
         pip install google-cloud-aiplatform kfp
         python3 pipeline.py
-  # Step 2: Use the Google Cloud SDK container to submit the pipeline.
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+  - name: "gcr.io/cloud-builders/gcloud"
     id: "RunTrainingPipeline"
     entrypoint: "bash"
     args:
       - "-c"
       - |
-        # THIS IS THE FIX: Install the beta components before running the command.
-        gcloud components install beta --quiet
-        
-        # Now the rest of the command will work.
         gcloud ai pipelines run \
           --project=${PROJECT_ID} \
           --region=europe-west4 \
