@@ -22,8 +22,8 @@ REQUIRED_FEATURES = [
     "sulphates",
     "alcohol"
 ]
-MIN_QUALITY_SCORE = 3
-MAX_QUALITY_SCORE = 9
+MIN_QUALITY_SCORE = 0
+MAX_QUALITY_SCORE = 10
 
 def get_identity_token(audience):
     try:
@@ -38,13 +38,23 @@ def get_identity_token(audience):
         raise
 
 def get_quality_rating(quality_score):
-    quality_score = int(quality_score)
-    if quality_score <= 4: stars, label = 0, "Poor Quality"
-    elif quality_score <= 6: stars, label = 1, "Average Quality"
-    elif quality_score == 7: stars, label = 2, "Good Quality"
-    else: stars, label = 3, "Excellent Quality"
-    percentage = ((quality_score - MIN_QUALITY_SCORE) / (MAX_QUALITY_SCORE - MIN_QUALITY_SCORE)) * 100
-    return {"stars": stars, "label": label, "percentage": max(0, min(100, percentage))}
+    # Clamp to 0-10 range
+    quality_score = max(MIN_QUALITY_SCORE, min(MAX_QUALITY_SCORE, int(quality_score)))
+    
+    # Define rating based on 0-10 scale
+    if quality_score <= 3:
+        stars, label = 0, "Poor Quality"
+    elif quality_score <= 5:
+        stars, label = 1, "Below Average"
+    elif quality_score <= 6:
+        stars, label = 2, "Average Quality"
+    elif quality_score <= 8:
+        stars, label = 3, "Good Quality"
+    else:
+        stars, label = 4, "Excellent Quality"
+    
+    percentage = (quality_score / MAX_QUALITY_SCORE) * 100
+    return {"stars": stars, "label": label, "percentage": percentage}
 
 @app.route("/")
 def index():
@@ -80,8 +90,8 @@ def predict():
         quality = data.get("prediction")
         if quality is None:
             return render_template("result.html", error=f"API gave an unexpected response: {data}")
+        
         rating_info = get_quality_rating(quality)
-        # We need to pass the minimum/maximum quality to the results page as well.
         return render_template("result.html", quality=quality, features=features, rating=rating_info,
                              min_quality=MIN_QUALITY_SCORE, max_quality=MAX_QUALITY_SCORE)
     except Exception as e:
@@ -89,6 +99,10 @@ def predict():
         print(error_msg)
         traceback.print_exc()
         return render_template("result.html", error=error_msg)
+
+@app.route("/health", methods=["GET"])
+def health_check():
+    return {"status": "healthy"}, 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
