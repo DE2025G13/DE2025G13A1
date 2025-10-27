@@ -40,8 +40,7 @@ def get_identity_token(audience):
 def get_quality_rating(quality_score):
     # Clamp to 0-10 range
     quality_score = max(MIN_QUALITY_SCORE, min(MAX_QUALITY_SCORE, int(quality_score)))
-    
-    # Define rating based on 0-10 scale
+
     if quality_score <= 3:
         stars, label = 0, "Poor Quality"
     elif quality_score <= 5:

@@ -12,6 +12,7 @@ CONFIG_BLOB = os.environ.get("CONFIG_BLOB", "config/model-config.json")
 FALLBACK_MODEL_URI = "gs://yannick-wine-models/production_model/model.joblib"
 LOCAL_MODEL_PATH = "/tmp/model.joblib"
 model = None
+model_metadata = {}
 
 def get_production_model_uri():
     """Fetch the production model URI from the config file in GCS"""
@@ -26,7 +27,7 @@ def get_production_model_uri():
             return FALLBACK_MODEL_URI
         
         config_str = blob.download_as_text()
-        print(f"Downloaded config (length={len(config_str)}): [{config_str[:200]}]")
+        print(f"Downloaded config (length={len(config_str)})")
         
         if not config_str or config_str.strip() == "":
             print(f"Config is empty! Using fallback: {FALLBACK_MODEL_URI}")
@@ -80,19 +81,35 @@ def download_model():
         return False
 
 def load_model():
-    global model
+    global model, model_metadata
     if os.path.exists(LOCAL_MODEL_PATH):
         try:
             print("Loading model from local file into memory.")
-            model = joblib.load(LOCAL_MODEL_PATH)
-            print("Model loaded successfully.")
+            loaded_data = joblib.load(LOCAL_MODEL_PATH)
+            
+            if isinstance(loaded_data, dict) and "model" in loaded_data:
+                model = loaded_data["model"]
+                model_metadata = {
+                    "quality_offset": loaded_data.get("quality_offset", 0),
+                    "model_type": loaded_data.get("model_type", "unknown")
+                }
+                print(f"Model loaded successfully. Type: {model_metadata['model_type']}, Quality offset: {model_metadata['quality_offset']}")
+            else:
+                model = loaded_data
+                model_metadata = {
+                    "quality_offset": 0,
+                    "model_type": "legacy"
+                }
+                print("Model loaded (legacy format without metadata).")
         except Exception as e:
             print(f"An error occurred while loading the model file: {e}")
             traceback.print_exc()
             model = None
+            model_metadata = {}
     else:
         print("Model file could not be found locally.")
         model = None
+        model_metadata = {}
 
 if download_model():
     load_model()
@@ -121,9 +138,14 @@ def predict():
         input_df = pd.DataFrame([data], columns=features)
         input_df["type"] = input_df["type"].apply(lambda x: 1 if x == "red" else 0)
         print(f"Encoded input for model: {input_df.to_dict('records')}")
+        
         prediction_result = model.predict(input_df)
-        final_prediction = int(round(prediction_result[0]))
-        print(f"Model prediction result: {final_prediction}")
+        raw_prediction = int(prediction_result[0])
+        
+        quality_offset = model_metadata.get("quality_offset", 0)
+        final_prediction = raw_prediction + quality_offset
+        
+        print(f"Raw prediction: {raw_prediction}, Offset: {quality_offset}, Final: {final_prediction}")
         return jsonify({"prediction": final_prediction})
     except Exception as e:
         print(f"An error occurred during prediction: {e}")
@@ -133,7 +155,12 @@ def predict():
 @app.route("/health", methods=["GET"])
 def health_check():
     if model:
-        return jsonify({"status": "ok", "model": "loaded"}), 200
+        return jsonify({
+            "status": "ok", 
+            "model": "loaded",
+            "model_type": model_metadata.get("model_type", "unknown"),
+            "quality_offset": model_metadata.get("quality_offset", 0)
+        }), 200
     else:
         print("Health check failed: model not loaded. Attempting to reload.")
         if download_model():
