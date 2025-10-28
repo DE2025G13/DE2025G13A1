@@ -1,82 +1,59 @@
-# MLOps Project: End-to-End Wine Quality Prediction
+# MLOps: End-to-End Wine Quality Prediction System
 
-Hey there! Welcome to our MLOps project. The goal here is to build a full, automated system that can train a machine learning model to predict the quality of wine and then deploy it as a web application.
+This project implements a fully automated, end-to-end MLOps system on Google Cloud Platform to predict wine quality. It features a complete CI/CD/CT (Continuous Integration/Deployment/Training) workflow that automatically builds, tests, trains, evaluates, and deploys a machine learning model and its serving application.
 
-This isn't just about building a model; it's about building the entire automated factory around it.
+## Key Features
 
-## What's This Project About?
+-   **Automated CI/CD/CT**: The entire lifecycle from code/data commit to production deployment is automated.
+-   **Three-Branch Git Strategy**: Code, data, and frontend changes are managed in separate branches (`main`, `dataset`, `frontend`) to trigger specific, efficient workflows without unnecessary rebuilds.
+-   **Serverless Architecture**: Built entirely on serverless GCP services like Cloud Build, Vertex AI, and Cloud Run for scalability and cost-efficiency.
+-   **Automated Quality Gates**:
+    -   **Data**: New datasets are automatically validated against 17 quality checks before being used for training.
+    -   **Model**: A new model is only promoted to production if it outperforms the current one on both accuracy and F1-score metrics.
+-   **Parallel Model Training**: The system trains Random Forest, XGBoost, and SVM models in parallel, selecting the best candidate via cross-validation.
 
-The core idea is to predict a wine's quality score based on its chemical properties and whether it's red or white. We've set up a complete MLOps pipeline using Google Cloud that handles everything from data changes to model deployment automatically.
+## Architecture and Automation
 
-### The Dataset (`wine.csv`)
+The system's automation is orchestrated by Cloud Build triggers linked to three specific Git branches.
 
-The data we're using is a combined dataset of red and white variants of the Portuguese "Vinho Verde" wine. This makes the prediction task more interesting!
+1.  **`dataset` Branch (Continuous Training)**
+    -   **Trigger**: A push of a new `wine.csv` to this branch.
+    -   **Action**:
+        1.  **Validate Data**: Cloud Build runs 17 data quality tests.
+        2.  **Store Commit Hash**: If validation passes, the new dataset's Git commit hash is saved to Cloud Storage.
+        3.  **Trigger Pipeline**: A Vertex AI training pipeline is automatically started, using the newly validated data.
 
-- **Filename:** `wine.csv`
-- **Location:** `dataset/wine.csv`
-- **What's inside:** It has about 6,500 rows.
-- **Features:** It includes a new `type` column ("red" or "white") and 11 chemical measurements like `fixed_acidity`, `volatile_acidity`, `alcohol`, etc.
-- **Target:** The `quality` column is what we're trying to predict.
-- **Versioning:** We keep the dataset directly in a separate `dataset` Git branch. This is super handy because every time we update the data and push to that branch, it automatically triggers a new training pipeline run. It also gives us a full version history of the datasets we've used for training.
+2.  **`main` Branch (Continuous Integration)**
+    -   **Trigger**: A push with changes to ML pipeline components.
+    -   **Action**:
+        1.  **Run Unit Tests**: All 7 pipeline components are tested.
+        2.  **Build Docker Images**: New Docker images for the components are built and pushed to Artifact Registry.
+        3.  **Run Pipeline**: The full Vertex AI pipeline is executed using the latest validated dataset to ensure integrity.
 
-## Our MLOps Architecture on Google Cloud
+3.  **`frontend` Branch (Continuous Deployment)**
+    -   **Trigger**: A push with changes to the API or UI code.
+    -   **Action**:
+        1.  **Run Integration Tests**: A suite of 24 tests validates the API and UI.
+        2.  **Build Images**: Docker images for the `prediction-api` and `prediction-ui` are built.
+        3.  **Deploy to Cloud Run**: Both services are automatically deployed to Cloud Run.
 
-We're using a bunch of different tools on Google Cloud Platform (GCP) to make this all work together. Here’s a quick rundown of our setup.
+## Technology Stack
 
-### 1. Google Cloud Storage (GCS) Buckets
+-   **Orchestration**: Vertex AI Pipelines, Cloud Build
+-   **Containerization**: Docker, Google Artifact Registry
+-   **Serving**: Cloud Run (for a private API and a public UI)
+-   **Storage**: Google Cloud Storage (for models, artifacts, and configs)
+-   **ML Frameworks**: Scikit-learn, XGBoost
+-   **Version Control**: GitHub
 
-We use GCS to store all the "stuff" (artifacts) our pipeline produces. We've set up a few different buckets to keep things organized:
+## Vertex AI ML Pipeline Flow
 
-- **`yannick-wine-models`**: This is where we store our trained models. The final, best model that's currently in production lives here.
-- **`yannick-pipeline-root`**: This is the main "workspace" for our Vertex AI pipeline. Every time the pipeline runs, it creates a new folder here to store all the intermediate data, logs, and artifacts for that specific run.
+When triggered, the ML pipeline executes the following serverless steps:
 
-### 2. Artifact Registry
-
-This is our private Docker Hub for the project.
-
-- **Repository Name:** `yannick-wine-repo`
-- **What it does:** Every component of our ML pipeline (like data-ingestion, model-trainers, and the evaluator) and our final applications (`prediction-api`, `prediction-ui`) are packaged into Docker images. This registry stores all those images.
-
-### 3. IAM Permissions (Who Can Do What)
-
-Getting permissions right is super important. We made sure the "robot" accounts (Service Accounts) used by Google Cloud had the right roles:
-
-- **Compute Engine default service account:** This is the account Vertex AI uses to run our pipeline steps. It has roles like `Vertex AI User` and `Storage Object Admin`.
-- **Cloud Build service account:** This is the account Cloud Build uses. It has roles like `Cloud Run Admin` (so it can deploy our apps) and `Artifact Registry Writer` (so it can push Docker images).
-
-### 4. Cloud Build Triggers (The Automation Magic)
-
-The triggers are the heart of our automation. We have three main triggers that watch our GitHub repository:
-
-#### Trigger 1: `build-and-run-on-code-change` (The CI Trigger)
-- **Watches:** Any push to the `main` branch.
-- **Action:** When we push new code, this trigger runs `components_cloudbuild.yaml`. This file first rebuilds all our Docker container images and then automatically starts a Vertex AI pipeline run to validate that our new code works correctly with the current dataset.
-
-#### Trigger 2: `trigger-training-on-data-change` (The CT Trigger)
-- **Watches:** A push to the `dataset` branch, but *only* if files inside the `dataset/` folder have changed.
-- **Action:** When we push a new `wine.csv`, this trigger runs `run_training_pipeline.yaml`. Its only job is to start a new Vertex AI training pipeline run using the new data.
-
-#### Trigger 3: `deploy-wine-app-trigger` (The CD Trigger)
-- **Watches:** This trigger doesn't watch a Git branch. It is a webhook trigger that is invoked programmatically.
-- **Action:** At the end of a successful Vertex AI pipeline run, if the new model is better than the production model, a special pipeline component calls this trigger. The trigger then executes `deployment_cloudbuild.yaml`, which handles the entire application deployment process: copying the new model to the production GCS bucket, building the API and UI images, and deploying both services to Cloud Run.
-
-### 5. The Vertex AI Pipeline
-
-This is where the actual machine learning happens. It's a graph of steps that runs serverlessly on Vertex AI.
-
-1.  **Ingest Data:** Grabs the `wine.csv` from the Git repo.
-2.  **Split Data:** Preprocesses the data (encodes the 'type' column) and splits it into training and testing sets.
-3.  **Train Models (in parallel):** Trains three different models at the same time: `Random Forest`, `XGBoost`, and `SVM`.
-4.  **Evaluate & Decide:**
-    - It uses **k-fold cross-validation** to robustly pick the best-performing model out of the three candidates.
-    - It then evaluates this "champion" model on the hold-out test set and compares its score to the model currently in production.
-    - If the new one is better, it decides to deploy.
-5.  **Trigger CD (Conditional):** If the decision is to deploy, this final step kicks off our deployment pipeline by invoking the `deploy-wine-app-trigger`.
-
-### 6. The Deployment Pipeline (CD)
-
-This pipeline, defined in `deployment_cloudbuild.yaml`, gets our model and apps live.
-
-1.  **Copy Model:** It copies the winning model to the final production location in GCS.
-2.  **Build & Deploy API:** It builds and deploys the `prediction-api` to Cloud Run as a private service.
-3.  **Build & Deploy UI:** It builds and deploys the `prediction-ui` to Cloud Run as a public web application, telling it the private URL of the new API.
+1.  **Data Ingestion**: Downloads the validated `wine.csv` from GitHub using the stored commit hash.
+2.  **Train-Test Split**: Splits the data into stratified training and testing sets.
+3.  **Train Models**: Trains Random Forest, XGBoost, and SVM models in parallel.
+4.  **Evaluate & Decide**:
+    -   Selects the best-performing candidate model using 5-fold cross-validation.
+    -   Compares this candidate against the current production model on a hold-out test set.
+5.  **Trigger Deployment**: If the new model is superior, it is uploaded to Cloud Storage as the new production model, and the `frontend` branch deployment trigger is called to update the live application.
