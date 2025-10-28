@@ -21,7 +21,6 @@ load_data = import_load_data()
 @pytest.fixture
 def mock_raw_data():
     return pd.DataFrame({
-        "Id": [1, 2, 3, 4],
         "type": ["red", "white", "red", "white"],
         "fixed_acidity": [7.4, 6.8, 7.2, 6.5],
         "volatile_acidity": [0.7, 0.6, 0.65, 0.58],
@@ -47,7 +46,6 @@ def test_data_ingestion(mock_storage_client, mock_raw_data, tmp_path):
     output_file = output_dir / "wine.csv"
     assert output_file.exists(), "Output file not created"
     df = pd.read_csv(output_file)
-    assert "Id" not in df.columns, "Id column should be dropped"
     assert df["type"].dtype in [int, 'int64'], "Type should be encoded as integer"
     assert set(df["type"].unique()).issubset({0, 1}), "Type should be 0 or 1"
     assert len(df) == len(mock_raw_data), "Row count should match"

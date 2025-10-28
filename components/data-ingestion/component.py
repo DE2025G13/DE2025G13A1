@@ -28,9 +28,6 @@ def load_data(input_data_gcs_path: str, output_dataset_path: str):
         raise ValueError(f"Unsupported input source: {input_data_gcs_path}")
     
     df = pd.read_csv(local_file, sep=";")
-    if "Id" in df.columns:
-        print("Found and removed the 'Id' column.")
-        df.drop(columns="Id", inplace=True)
     print("Encoding the 'type' column (white=0, red=1).")
     df["type"] = df["type"].apply(lambda x: 1 if x == "red" else 0)
     os.makedirs(output_dataset_path, exist_ok=True)
