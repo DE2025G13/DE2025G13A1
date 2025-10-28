@@ -1,19 +1,6 @@
 options:
   logging: CLOUD_LOGGING_ONLY
 steps:
-  - name: "gcr.io/cloud-builders/git"
-    id: "FetchDataset"
-    entrypoint: "bash"
-    args:
-      - "-c"
-      - |
-        git fetch origin dataset
-        git checkout origin/dataset -- wine.csv
-        ls -la wine.csv
-  - name: "gcr.io/cloud-builders/gsutil"
-    id: "UploadDataset"
-    args: ["cp", "wine.csv", "gs://yannick-pipeline-root/datasets/wine-${SHORT_SHA}.csv"]
-    waitFor: ["FetchDataset"]
   - name: "python:3.9-slim"
     id: "RunUnitTests"
     entrypoint: "bash"
@@ -23,7 +10,6 @@ steps:
         pip install pytest pandas scikit-learn joblib numpy xgboost flask google-cloud-storage --break-system-packages
         echo "Running unit tests..."
         pytest unit-tests/ -v -p no:warnings --tb=short
-    waitFor: ["-"]
   - name: "gcr.io/cloud-builders/docker"
     id: "BuildDataIngestion"
     args: ["build", "-t", "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest", "."]
@@ -83,28 +69,45 @@ steps:
         python3 pipeline.py
     waitFor: ["PushAllImages"]
   - name: "python:3.9-slim"
-    id: "RunTrainingPipeline"
+    id: "RunValidationPipeline"
     entrypoint: "bash"
     args:
       - "-c"
       - |
-        pip install 'google-cloud-aiplatform[pipelines]' --break-system-packages
+        pip install 'google-cloud-aiplatform[pipelines]' google-cloud-storage --break-system-packages
         python3 -c "
         from google.cloud import aiplatform
+        from google.cloud import storage
+        
         aiplatform.init(project='${PROJECT_ID}', location='europe-west4')
+        
+        client = storage.Client()
+        bucket = client.bucket('yannick-pipeline-root')
+        blob = bucket.blob('datasets/last-successful-dataset-commit.txt')
+        
+        try:
+            commit_sha = blob.download_as_text().strip()
+            github_url = f'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/{commit_sha}/wine.csv'
+            print(f'Using last successful dataset from commit: {commit_sha}')
+        except Exception as e:
+            print(f'Warning: Could not retrieve last successful commit: {e}')
+            print('Falling back to default dataset location')
+            github_url = 'gs://yannick-pipeline-root/datasets/wine-latest.csv'
+        
         job = aiplatform.PipelineJob(
-            display_name='ci-triggered-run-${SHORT_SHA}',
+            display_name='ci-validation-run-${SHORT_SHA}',
             template_path='wine_quality_pipeline_git_triggered.yaml',
             pipeline_root='gs://yannick-pipeline-root',
             enable_caching=False,
             parameter_values={
-                'input_data_gcs_path': 'gs://yannick-pipeline-root/datasets/wine-${SHORT_SHA}.csv'
+                'input_data_gcs_path': github_url
             }
         )
-        job.submit()
-        print(f'Pipeline submitted: {job.resource_name}')
+        
+        job.submit(service_account='793868790421-compute@developer.gserviceaccount.com')
+        print(f'Validation pipeline submitted: {job.resource_name}')
         "
-    waitFor: ["CompilePipeline", "UploadDataset"]
+    waitFor: ["CompilePipeline"]
 images:
   - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/data-ingestion:latest"
   - "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo/train-test-splitter:latest"
