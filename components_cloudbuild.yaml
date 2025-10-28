@@ -87,7 +87,7 @@ steps:
         
         try:
             commit_sha = blob.download_as_text().strip()
-            github_url = f'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/{commit_sha}/wine.csv'
+            github_url = f'https://raw.githubusercontent.com/DE2025G13/DE2025G13A1/{commit_sha}/wine.csv'
             print(f'Using last successful dataset from commit: {commit_sha}')
         except Exception as e:
             print(f'Warning: Could not retrieve last successful commit: {e}')
