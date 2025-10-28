@@ -1,5 +1,3 @@
-options:
-  logging: CLOUD_LOGGING_ONLY
 steps:
   - name: "gcr.io/cloud-builders/git"
     id: "FetchLatestDataset"
@@ -9,7 +7,8 @@ steps:
       - |
         git fetch origin dataset
         git checkout origin/dataset -- wine.csv test_wine_dataset.py
-        ls -la wine.csv
+        echo "Current commit: ${COMMIT_SHA}"
+        ls -la wine.csv test_wine_dataset.py
   - name: "python:3.9-slim"
     id: "ValidateDataset"
     entrypoint: "bash"
@@ -26,8 +25,23 @@ steps:
     waitFor: ["FetchLatestDataset"]
   - name: "gcr.io/cloud-builders/gsutil"
     id: "UploadValidatedDataset"
-    args: ["cp", "wine.csv", "gs://yannick-pipeline-root/datasets/wine-latest.csv"]
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        gsutil cp wine.csv gs://yannick-pipeline-root/datasets/wine-${COMMIT_SHA}.csv
+        echo "Uploaded dataset for commit ${COMMIT_SHA}"
     waitFor: ["ValidateDataset"]
+  - name: "gcr.io/cloud-builders/gsutil"
+    id: "MarkAsSuccessful"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        echo "${COMMIT_SHA}" > last-successful-commit.txt
+        gsutil cp last-successful-commit.txt gs://yannick-pipeline-root/datasets/last-successful-commit.txt
+        echo "Marked ${COMMIT_SHA} as last successful dataset commit"
+    waitFor: ["UploadValidatedDataset"]
   - name: "python:3.9-slim"
     id: "CompilePipeline"
     entrypoint: "bash"
@@ -38,7 +52,7 @@ steps:
         git checkout origin/main -- pipeline.py
         pip install google-cloud-aiplatform kfp --break-system-packages
         python3 pipeline.py
-    waitFor: ["UploadValidatedDataset"]
+    waitFor: ["MarkAsSuccessful"]
   - name: "python:3.9-slim"
     id: "RunTrainingPipeline"
     entrypoint: "bash"
@@ -53,9 +67,12 @@ steps:
             display_name='data-triggered-run-${SHORT_SHA}',
             template_path='wine_quality_pipeline_git_triggered.yaml',
             pipeline_root='gs://yannick-pipeline-root',
-            enable_caching=False
+            enable_caching=False,
+            parameter_values={
+                'input_data_gcs_path': 'gs://yannick-pipeline-root/datasets/wine-${COMMIT_SHA}.csv'
+            }
         )
         job.submit(service_account='793868790421-compute@developer.gserviceaccount.com')
-        print(f'Pipeline submitted: {job.resource_name}')
+        print(f'Pipeline submitted with dataset from commit: ${COMMIT_SHA}')
         "
     waitFor: ["CompilePipeline"]
