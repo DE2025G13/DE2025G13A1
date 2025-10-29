@@ -1,7 +1,7 @@
 from kfp import dsl
 from kfp.dsl import Dataset, Input, Output, Model, Metrics, OutputPath
 
-# This is the base path in our Artifact Registry where the component images are stored.
+# This is the base path in our Artifact Registry where the component images are stored in.
 IMAGE_REGISTRY_PATH = "europe-west4-docker.pkg.dev/data-engineering-vm/yannick-wine-repo"
 
 @dsl.container_component
