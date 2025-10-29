@@ -66,14 +66,17 @@ def model_evaluator_op(
     )
 
 @dsl.container_component
-def trigger_cd_pipeline_op(project_id: str, trigger_id: str, new_model_uri: str):
-    # This component's only job is to start our CD pipeline if a new model is chosen.
+def trigger_cd_pipeline_op(project_id: str, trigger_id: str, region: str = "europe-west4", branch: str = "frontend"):
     return dsl.ContainerSpec(
         image=f"{IMAGE_REGISTRY_PATH}/trigger-cd:latest",
         command=["python3", "component.py"],
-        args=["--project-id", project_id, "--trigger-id", trigger_id, "--new-model-uri", new_model_uri]
+        args=[
+            "--project-id", project_id, 
+            "--trigger-id", trigger_id,
+            "--region", region,
+            "--branch", branch
+        ]
     )
-
 @dsl.pipeline(name="wine-quality-git-triggered-pipeline")
 def wine_quality_pipeline(
     input_data_gcs_path: str = "gs://yannick-pipeline-root/datasets/wine-latest.csv",
@@ -98,12 +101,12 @@ def wine_quality_pipeline(
         model_bucket_name=model_bucket,
         prod_model_blob="production_model/model.joblib",
     ).set_caching_options(enable_caching=False)
-    # This 'If' block creates a conditional branch in our pipeline.
     with dsl.If(eval_task.outputs["decision"] == "deploy_new", name="if-new-model-is-better"):
         trigger_cd_pipeline_op(
             project_id=project_id,
             trigger_id=cd_trigger_id,
-            new_model_uri=eval_task.outputs["best_model_uri"]
+            region="europe-west4",
+            branch="frontend"
         )
 
 if __name__ == "__main__":
